@@ -297,6 +297,30 @@ input,select{font-family:inherit;font-size:16px}
 .bmatch .bteam.warn select{border-color:var(--alerta);background:#FDEBEA}
 .bmatch .bvs{text-align:center;font-size:9px;font-weight:900;color:var(--gris-claro)}
 .bmatch .clash{font-size:10px;font-weight:800;color:var(--alerta);margin-top:4px;display:flex;align-items:center;gap:5px}
+.bmatch .bname{flex:1;min-width:0;font-size:13px;font-weight:700;color:var(--tinta);padding:7px 4px}
+.bmatch .bteam.bwin{background:#E5F5EC;border-radius:9px;padding-left:7px;padding-right:4px}
+.bmatch .bteam.bwin .bname{color:var(--ok);font-weight:800}
+.bmatch .bteam.blose{opacity:.45}
+.bmatch .bteam.blose .bname{text-decoration:line-through}
+.bwin-btn{flex-shrink:0;background:var(--azul-suave);border-radius:9px;padding:6px 9px;font-size:15px;line-height:1;filter:grayscale(1);opacity:.45;transition:all .12s}
+.bwin-btn.on{filter:none;opacity:1;background:#CFF3E0;box-shadow:0 0 0 2px rgba(30,142,90,.3)}
+.bwin-btn:active{transform:scale(.9)}
+/* aviso de resultados pendientes */
+.pend-banner{border-radius:12px;margin-bottom:16px;overflow:hidden;border:1.5px solid var(--linea);background:#fff;box-shadow:var(--sombra)}
+.pend-banner.alert{border-color:#E8A33D;background:#FFF7EB}
+.pend-head{padding:12px 14px;font-size:14px;font-weight:700;color:var(--tinta);display:flex;align-items:center;cursor:pointer}
+.pend-banner.alert .pend-head{color:#9A5B00}
+.pend-caret{margin-left:auto;font-size:12px;color:var(--gris)}
+.pend-list{border-top:1px solid var(--linea)}
+.pend-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid var(--linea)}
+.pend-item:first-child{border-top:none}
+.pend-when{flex-shrink:0;font-size:12px;font-weight:800;color:var(--francia);min-width:58px}
+.pend-info{flex:1;min-width:0}
+.pend-cat{font-size:10px;font-weight:800;color:var(--gris);text-transform:uppercase}
+.pend-teams{font-size:13px;font-weight:700;color:var(--tinta)}
+.pend-go{flex-shrink:0;font-size:12px;font-weight:800;color:var(--francia)}
+.pend-ok{font-size:13px;font-weight:700;color:var(--ok);background:#E5F5EC;border-radius:12px;padding:11px 14px;margin-bottom:16px;text-align:center}
+.pend-mini{background:#FFF7EB;border:1.5px solid #E8A33D;color:#9A5B00;border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px}
 
 /* ===== SYNC ===== */
 .sync-card{background:#fff;border:1.5px solid var(--linea);border-radius:var(--r);padding:18px;margin-bottom:16px;box-shadow:var(--sombra)}
@@ -365,6 +389,7 @@ input,select{font-family:inherit;font-size:16px}
     <h1>Campeonato 15/0</h1>
     <div class="tag">Pando Padel · Ruta 8 Km 29</div>
   </div>
+  <div id="homePending"></div>
   <div class="cat-grid" id="homeCatGrid"></div>
   <div class="home-links">
     <div class="home-link" onclick="go('horarios')"><span class="ic">🕐</span> Ver por horario y cancha <span class="ar">›</span></div>
@@ -469,9 +494,9 @@ function mkGroup(venue,court,day,startHour,trio){
   const pairs=[mkPair(trio[0][0],trio[0][1]),mkPair(trio[1][0],trio[1][1]),mkPair(trio[2][0],trio[2][1])];
   const blank=()=>({s1:[null,null],s2:[null,null],stb:[null,null]});
   const matches=[
-    {hour:startHour,   a:0,   b:1,   ...blank()}, // P1 fijo: A vs B
-    {hour:startHour+1, a:2,   b:null,...blank()}, // P2: C vs (ganador elige)
-    {hour:startHour+2, a:null,b:null,...blank()}  // P3: restante
+    {hour:startHour,   a:0, b:1, ...blank()}, // P1: pareja 1 vs pareja 2 (descansa la 3)
+    {hour:startHour+1, a:2, b:0, ...blank()}, // P2: pareja 3 vs pareja 1
+    {hour:startHour+2, a:2, b:1, ...blank()}  // P3: pareja 3 vs pareja 2
   ];
   return {id:nid(),venue,court,day,startHour,pairs,matches};
 }
@@ -563,7 +588,7 @@ function hydrateGroup(g){
   let pairs=toArr(g.pairs).map(hydratePair);
   while(pairs.length<3) pairs.push(hydratePair(null));
   const sh=(g.startHour===undefined||g.startHour===null)?10:g.startHour;
-  const defA=[0,2,null], defB=[1,null,null];
+  const defA=[0,2,2], defB=[1,0,1];
   let matches=toArr(g.matches).map((m,i)=>hydrateMatch(m,sh+i));
   while(matches.length<3){
     const i=matches.length;
@@ -584,8 +609,10 @@ function hydrateBracket(raw){
     const b=raw[k]; if(!b||typeof b!=="object") return;
     const slot=s=>({name:(s&&s.name)||"",gid:s&&s.gid!==undefined?s.gid:null,
                     group:s&&s.group,bye:!!(s&&s.bye)});
-    const rounds=toArr(b.rounds).map(rd=>toArr(rd).map(m=>({a:slot(m&&m.a),b:slot(m&&m.b)})));
-    out[k]={size:b.size||2,rounds};
+    const r0=toArr(b.r0).map(m=>({a:slot(m&&m.a),b:slot(m&&m.b)}));
+    const winners=(b.winners&&typeof b.winners==="object")?b.winners:{};
+    if(r0.length) out[k]={size:b.size||2,r0,winners};
+    // (llaves con el formato viejo se ignoran; se regeneran con un toque)
   });
   return out;
 }
@@ -751,6 +778,8 @@ function applyLogo(){
    INICIO
    ============================================================ */
 function renderInicio(){
+  const mini=document.getElementById("homePending");
+  if(mini) mini.innerHTML=pendingMiniHTML();
   const grid=document.getElementById("homeCatGrid");
   grid.innerHTML="";
   state.categories.forEach(cat=>{
@@ -795,6 +824,11 @@ function renderCategoria(){
       '<button class="btn" onclick="addGroup(\''+cat.id+'\')">＋ Agregar primer grupo</button></div>';
     return;
   }
+  // completar partidos de grupos ya cargados (P2/P3 que hayan quedado a definir)
+  let filled=false;
+  cat.groups.forEach(g=>{ if(autoFillMatches(g)) filled=true; });
+  if(filled) save();
+  cont.innerHTML=pendingBannerHTML(); // aviso de resultados pendientes arriba
   cat.groups.forEach((g,gi)=>cont.appendChild(groupCard(cat,g,gi)));
   const add=document.createElement("button");
   add.className="addgroup-btn";
@@ -977,12 +1011,25 @@ function addGroup(catId){
   const g={id:nid(),venue:"15/0",court:1,day:"Sábado",startHour:10,
     pairs:[mkPair("",""),mkPair("",""),mkPair("","")],
     matches:[
-      {hour:10,a:0,b:1,...blank()},
-      {hour:11,a:2,b:null,...blank()},
-      {hour:12,a:null,b:null,...blank()}
+      {hour:10,a:0,b:1,...blank()}, // P1: pareja 1 vs pareja 2
+      {hour:11,a:2,b:0,...blank()}, // P2: pareja 3 vs pareja 1
+      {hour:12,a:2,b:1,...blank()}  // P3: pareja 3 vs pareja 2
     ]};
   c.groups.push(g); currentCat=catId; save(); renderCategoria(); renderInicio();
   toast("Grupo agregado");
+}
+/* Completa automáticamente las parejas de los 3 partidos (round-robin):
+   P1 = 1 vs 2, P2 = 3 vs 1, P3 = 3 vs 2. Solo rellena lo que esté vacío,
+   así no pisa cambios hechos a mano ni partidos ya jugados. */
+function autoFillMatches(g){
+  const defA=[0,2,2], defB=[1,0,1];
+  let changed=false;
+  for(let i=0;i<3;i++){
+    const m=g.matches[i]; if(!m)continue;
+    if(m.a===null||m.a===undefined){ m.a=defA[i]; changed=true; }
+    if(m.b===null||m.b===undefined){ m.b=defB[i]; changed=true; }
+  }
+  return changed;
 }
 function delGroup(catId,gid){
   const c=catById(catId); if(!c)return;
@@ -990,6 +1037,94 @@ function delGroup(catId,gid){
   c.groups=c.groups.filter(g=>g.id!==gid);
   save(); renderCategoria(); renderInicio();
   toast("Grupo eliminado");
+}
+
+/* ============================================================
+   RESULTADOS PENDIENTES — avisa los partidos ya jugados sin resultado
+   ============================================================ */
+const DOW_TORNEO={"Viernes":5,"Sábado":6,"Domingo":0};
+const OVERDUE_MIN=75; // margen tras la hora de inicio para considerarlo "ya jugado"
+// Convierte día+hora del partido a fecha real, solo durante el finde del torneo
+function matchStartDate(day,hour){
+  if(hour===null||hour===undefined) return null;
+  const now=new Date(), today=now.getDay();
+  if(today!==5 && today!==6 && today!==0) return null; // solo vie/sáb/dom
+  const target=DOW_TORNEO[day]; if(target===undefined) return null;
+  const ord=d=> d===0?7:d; // domingo va al final
+  const diff=ord(target)-ord(today);
+  const d=new Date(now); d.setDate(now.getDate()+diff); d.setHours(hour,0,0,0);
+  return d;
+}
+function collectPending(){
+  const now=new Date(), list=[];
+  state.categories.forEach(cat=>{
+    cat.groups.forEach((g,gi)=>{
+      g.matches.forEach((m,mi)=>{
+        if(m.a===null||m.b===null) return;   // sin parejas definidas
+        if(matchWinner(m)) return;            // ya tiene resultado
+        const start=matchStartDate(g.day,m.hour);
+        const overdue = start ? (now.getTime() > start.getTime()+OVERDUE_MIN*60000) : false;
+        list.push({catId:cat.id,catName:cat.name,gid:g.id,groupNum:gi+1,mi,
+          day:g.day,hour:m.hour,venue:g.venue,court:g.court,
+          teamA:pairName(g.pairs[m.a]),teamB:pairName(g.pairs[m.b]),overdue});
+      });
+    });
+  });
+  return list;
+}
+function pendingBannerHTML(){
+  const pend=collectPending();
+  if(pend.length===0){
+    // solo felicito si el torneo ya arrancó (hay algún resultado cargado)
+    const anyDone=state.categories.some(c=>c.groups.some(g=>g.matches.some(m=>matchWinner(m))));
+    return anyDone?'<div class="pend-ok">✓ Todos los resultados están al día</div>':"";
+  }
+  const overdue=pend.filter(p=>p.overdue);
+  const isAlert=overdue.length>0;
+  const show=isAlert?overdue:pend;
+  show.sort((a,b)=>(a.hour??99)-(b.hour??99));
+  let h='<div class="pend-banner'+(isAlert?" alert":"")+'">';
+  h+='<div class="pend-head" onclick="togglePend()">'+
+     (isAlert
+       ? '⚠️ <b style="margin:0 3px">'+overdue.length+'</b> '+(overdue.length===1?'partido ya jugado sin resultado':'partidos ya jugados sin resultado')
+       : '⏳ <b style="margin:0 3px">'+pend.length+'</b> '+(pend.length===1?'partido sin resultado':'partidos sin resultado'))+
+     '<span class="pend-caret" id="pendCaret">'+(isAlert?"▴":"▾")+'</span></div>';
+  h+='<div class="pend-list" id="pendList" style="display:'+(isAlert?"block":"none")+'">';
+  show.forEach(p=>{
+    h+='<div class="pend-item" onclick="goToMatch(\''+p.catId+'\',\''+p.gid+'\','+p.mi+')">'+
+       '<div class="pend-when">'+esc(p.day).slice(0,3)+' '+(p.hour??"?")+'hs</div>'+
+       '<div class="pend-info"><div class="pend-cat">'+esc(p.catName)+' · G'+p.groupNum+'</div>'+
+       '<div class="pend-teams">'+esc(p.teamA)+' vs '+esc(p.teamB)+'</div></div>'+
+       '<span class="pend-go">Cargar ›</span></div>';
+  });
+  h+='</div></div>';
+  return h;
+}
+function togglePend(){
+  const l=document.getElementById("pendList"), c=document.getElementById("pendCaret");
+  if(!l)return;
+  const open=l.style.display!=="none";
+  l.style.display=open?"none":"block";
+  if(c) c.textContent=open?"▾":"▴";
+}
+function goToMatch(catId,gid,mi){
+  currentCat=catId;
+  go("categoria");
+  setTimeout(()=>{
+    const el=document.getElementById("match-"+gid+"-"+mi);
+    if(el){
+      el.scrollIntoView({behavior:"smooth",block:"center"});
+      el.style.transition="box-shadow .3s";
+      el.style.boxShadow="0 0 0 3px var(--francia)";
+      setTimeout(()=>{ el.style.boxShadow=""; },1800);
+    }
+  },130);
+}
+// Mini aviso para el inicio (solo si hay atrasados)
+function pendingMiniHTML(){
+  const overdue=collectPending().filter(p=>p.overdue);
+  if(overdue.length===0) return "";
+  return '<div class="pend-mini" onclick="go(\'categoria\')">⚠️ Faltan <b style="margin:0 3px">'+overdue.length+'</b> resultados de partidos jugados <span class="pend-go">Cargar ›</span></div>';
 }
 </script>
 <script>
@@ -1068,41 +1203,29 @@ function roundNames(S){
 
 function generateBracket(catId){
   const cat=catById(catId); if(!cat)return;
-  const rank=categoryRanking(cat).all; // ordenados por calidad
+  const rank=categoryRanking(cat).all;
   const C=rank.length;
   if(C<2){ toast("Faltan clasificados. Cargá resultados primero."); return; }
   const S=nextPow2(C);
-  const byes=S-C;
-  // asignar seeds 1..C a clasificados; seeds > C son bye
-  const seedTeam={}; // seed -> team o null
+  const seedTeam={};
   for(let s=1;s<=S;s++) seedTeam[s]= s<=C ? rank[s-1] : null;
-
-  const order=seedOrder(S); // posiciones -> seed
-  // primera ronda: pares consecutivos
+  const order=seedOrder(S);
   let firstRound=[];
-  for(let i=0;i<order.length;i+=2){
-    firstRound.push({ sa:order[i], sb:order[i+1] });
-  }
-  // Anti-choque de grupo: si ambos del mismo grupo, intento swap del visitante con otro partido
-  function teamOf(seed){ return seedTeam[seed]; }
-  function clash(m){
-    const A=teamOf(m.sa),B=teamOf(m.sb);
-    return A&&B&&A.gid===B.gid;
-  }
+  for(let i=0;i<order.length;i+=2) firstRound.push({sa:order[i],sb:order[i+1]});
+  const teamOf=seed=>seedTeam[seed];
+  const clash=m=>{ const A=teamOf(m.sa),B=teamOf(m.sb); return A&&B&&A.gid===B.gid; };
+  // anti-choque de grupo en primera ronda
   for(let i=0;i<firstRound.length;i++){
     if(clash(firstRound[i])){
       for(let j=0;j<firstRound.length;j++){
         if(i===j)continue;
-        // probar swap de los "sb"
         const bi=firstRound[i].sb, bj=firstRound[j].sb;
         firstRound[i].sb=bj; firstRound[j].sb=bi;
         if(!clash(firstRound[i])&&!clash(firstRound[j])) break;
-        firstRound[i].sb=bi; firstRound[j].sb=bj; // deshacer
+        firstRound[i].sb=bi; firstRound[j].sb=bj;
       }
     }
   }
-  // construir estructura de rondas con slots
-  const rounds=[];
   const r0=firstRound.map(m=>{
     const A=teamOf(m.sa),B=teamOf(m.sb);
     return {
@@ -1110,32 +1233,46 @@ function generateBracket(catId){
       b: B?{name:B.name,gid:B.gid,group:B.group}:{name:"BYE",bye:true}
     };
   });
-  rounds.push(r0);
-  // rondas siguientes vacías (con byes propagados)
-  let prevCount=r0.length;
-  // propagación de byes a ronda 2
-  const propagated=[];
-  r0.forEach(m=>{
-    if(m.a.bye && !m.b.bye) propagated.push({name:m.b.name,gid:m.b.gid,group:m.b.group});
-    else if(m.b.bye && !m.a.bye) propagated.push({name:m.a.name,gid:m.a.gid,group:m.a.group});
-    else propagated.push(null); // se decide por partido
+  // los byes avanzan solos: marco ganador al lado que sí tiene pareja
+  const winners={};
+  r0.forEach((m,mi)=>{
+    if(m.a.bye && !m.b.bye) winners["0-"+mi]="b";
+    else if(m.b.bye && !m.a.bye) winners["0-"+mi]="a";
   });
-  let count=prevCount;
-  let carry=propagated;
-  while(count>1){
-    count=count/2;
-    const round=[];
-    for(let i=0;i<count;i++){
-      const t1=carry[i*2]||{name:""}, t2=carry[i*2+1]||{name:""};
-      round.push({a:{name:t1.name||"",gid:t1.gid,group:t1.group},b:{name:t2.name||"",gid:t2.gid,group:t2.group}});
-    }
-    rounds.push(round);
-    carry=new Array(count).fill(null); // rondas posteriores vacías
-  }
-  state.bracket[catId]={size:S,rounds};
+  state.bracket[catId]={size:S,r0,winners};
   save(); renderCruces(); toast("Llave generada");
 }
 
+// El equipo que ganó un partido (según lo marcado), o null si no se marcó
+function teamWinner(br,ri,mi,match){
+  const w=br.winners[ri+"-"+mi];
+  if(w==="a") return match.a;
+  if(w==="b") return match.b;
+  return null;
+}
+// Computa TODAS las rondas a partir de la 1ra + los ganadores marcados
+function computeRounds(br){
+  const rounds=[ br.r0.map(m=>({a:m.a,b:m.b})) ];
+  let ri=0;
+  while(rounds[ri].length>1){
+    const prev=rounds[ri], next=[];
+    for(let i=0;i<prev.length/2;i++){
+      const w1=teamWinner(br,ri,i*2,prev[i*2]);
+      const w2=teamWinner(br,ri,i*2+1,prev[i*2+1]);
+      next.push({a:w1||{name:""},b:w2||{name:""}});
+    }
+    rounds.push(next); ri++;
+  }
+  return rounds;
+}
+// Marca (o desmarca) quién ganó un partido → el ganador pasa solo a la ronda siguiente
+function setWinner(catId,ri,mi,side){
+  const br=state.bracket[catId]; if(!br)return;
+  const key=ri+"-"+mi;
+  if(br.winners[key]===side) delete br.winners[key]; // volver a tocar = desmarcar
+  else br.winners[key]=side;
+  save(); renderCruces();
+}
 function clearBracket(catId){
   if(!confirm("¿Borrar la llave de esta categoría?"))return;
   delete state.bracket[catId]; save(); renderCruces();
@@ -1161,9 +1298,7 @@ function renderCruces(){
   }
   const rank=categoryRanking(cat);
   const playedGroups=cat.groups.filter(groupComplete).length;
-  let html='<div class="bracket-info">Pasan las <b>2 primeras de cada grupo</b>. Las mejores rankeadas (por partidos ganados, después diferencia de sets y de games) arrancan más adelante. Dos parejas que ya se cruzaron en el grupo se intentan separar lo más posible.<br><b>'+playedGroups+'/'+cat.groups.length+'</b> grupos completos.</div>';
-
-  // ranking de clasificados
+  let html='<div class="bracket-info">Pasan las <b>2 primeras de cada grupo</b>. Las mejores rankeadas arrancan más adelante y dos parejas del mismo grupo se intentan separar.<br><b>'+playedGroups+'/'+cat.groups.length+'</b> grupos completos.</div>';
   html+='<h3 style="font-size:15px;color:var(--francia-osc);margin:0 0 10px">Clasificados</h3>';
   if(rank.all.length===0){
     html+='<div class="mini-note" style="margin-bottom:16px">Cargá resultados en la pestaña Categorías para ver los clasificados.</div>';
@@ -1171,24 +1306,21 @@ function renderCruces(){
     const C=rank.all.length, S=nextPow2(C), byes=S-C;
     html+='<div class="rank-list">';
     rank.all.forEach((t,i)=>{
-      const isBye=i<byes;
-      const nm=t.name||"(sin nombre)";
+      const isBye=i<byes; const nm=t.name||"(sin nombre)";
       html+='<div class="rank-item'+(isBye?" bye":"")+'"><span class="rn">'+(i+1)+'</span>'+
-        '<span class="rteam">'+esc(nm)+'</span>'+
-        '<span class="rgroup">G'+t.group+' · '+t.pos+'°</span>'+
+        '<span class="rteam">'+esc(nm)+'</span><span class="rgroup">G'+t.group+' · '+t.pos+'°</span>'+
         '<span class="rstats">'+t.pg+'PG · '+(t.difS>0?"+":"")+t.difS+'s</span>'+
         (isBye?'<span class="byetag">Bye</span>':"")+'</div>';
     });
     html+='</div>';
   }
-
-  // llave
   if(!state.bracket[currentCruce]){
     html+='<button class="btn wide" onclick="generateBracket(\''+currentCruce+'\')">🏆 Generar llave del domingo</button>';
-    html+='<div class="mini-note">Se arma con los clasificados actuales. Después la podés editar a mano.</div>';
+    html+='<div class="mini-note">Se arma con los clasificados actuales. Después es toda editable.</div>';
   }else{
     html+='<div class="btn-row"><button class="btn sm" onclick="generateBracket(\''+currentCruce+'\')">↻ Rehacer</button>'+
           '<button class="btn danger sm" onclick="clearBracket(\''+currentCruce+'\')">Borrar llave</button></div>';
+    html+='<div class="mini-note" style="margin-bottom:12px">Tocá el 🏆 de la pareja que ganó cada partido. El ganador pasa solo a la ronda siguiente; el que pierde queda afuera. En la primera ronda podés cambiar las parejas con los desplegables.</div>';
     html+=bracketHTML(currentCruce);
   }
   cont.innerHTML=html;
@@ -1202,24 +1334,38 @@ function classifiedOptions(catId,selName){
     const nm=t.name||"(sin nombre)";
     o+='<option value="'+esc(nm)+'||'+t.gid+'"'+(nm===selName?" selected":"")+'>'+esc(nm)+' (G'+t.group+')</option>';
   });
-  // BYE option
   o+='<option value="BYE||bye"'+(selName==="BYE"?" selected":"")+'>BYE</option>';
   return o;
 }
-
+function bTeamRow(catId,ri,mi,side,team,winSide,isR0,clash){
+  const isWin=winSide===side, isLose=winSide&&winSide!==side;
+  let cls="bteam"+(isWin?" bwin":"")+(isLose?" blose":"")+(clash?" warn":"");
+  let inner;
+  if(isR0){
+    inner='<select onchange="editR0Slot(\''+catId+'\','+mi+',\''+side+'\',this.value)">'+classifiedOptions(catId,team.name)+'</select>';
+  }else{
+    inner='<span class="bname">'+esc(team.name||"—")+'</span>';
+  }
+  const canWin=team.name && team.name!=="BYE";
+  const trophy=canWin?'<button class="bwin-btn'+(isWin?" on":"")+'" onclick="setWinner(\''+catId+'\','+ri+','+mi+',\''+side+'\')" title="Ganó">🏆</button>':'';
+  return '<div class="'+cls+'">'+inner+trophy+'</div>';
+}
 function bracketHTML(catId){
   const br=state.bracket[catId];
+  const rounds=computeRounds(br);
   const names=roundNames(br.size);
   let html='<div class="bracket">';
-  br.rounds.forEach((round,ri)=>{
+  rounds.forEach((round,ri)=>{
     html+='<div class="round"><div class="round-ttl">'+esc(names[ri]||("Ronda "+(ri+1)))+'</div>';
     round.forEach((m,mi)=>{
-      const clash = m.a.gid && m.b.gid && m.a.gid===m.b.gid && m.a.name!=="BYE" && m.b.name!=="BYE";
+      const w=br.winners[ri+"-"+mi];
+      const isR0=ri===0;
+      const clash=isR0 && m.a.gid && m.b.gid && m.a.gid===m.b.gid && !m.a.bye && !m.b.bye;
       html+='<div class="bmatch">'+
-        '<div class="bteam'+(clash?" warn":"")+'"><select onchange="editBracket(\''+catId+'\','+ri+','+mi+',\'a\',this.value)">'+classifiedOptions(catId,m.a.name)+'</select></div>'+
+        bTeamRow(catId,ri,mi,"a",m.a,w,isR0,clash)+
         '<div class="bvs">vs</div>'+
-        '<div class="bteam'+(clash?" warn":"")+'"><select onchange="editBracket(\''+catId+'\','+ri+','+mi+',\'b\',this.value)">'+classifiedOptions(catId,m.b.name)+'</select></div>'+
-        (clash?'<div class="clash">⚠️ Mismo grupo — reacomodá si podés</div>':"")+
+        bTeamRow(catId,ri,mi,"b",m.b,w,isR0,clash)+
+        (clash?'<div class="clash">⚠️ Mismo grupo — cambialas si podés</div>':"")+
         '</div>';
     });
     html+='</div>';
@@ -1227,10 +1373,10 @@ function bracketHTML(catId){
   html+='</div>';
   return html;
 }
-function editBracket(catId,ri,mi,side,val){
+function editR0Slot(catId,mi,side,val){
   const br=state.bracket[catId]; if(!br)return;
   const [name,gid]=val.split("||");
-  br.rounds[ri][mi][side]={name:name||"",gid:gid==="bye"?null:gid, bye:name==="BYE"};
+  br.r0[mi][side]={name:name||"",gid:gid==="bye"?null:gid,bye:name==="BYE"};
   save(); renderCruces();
 }
 </script>
@@ -1411,8 +1557,8 @@ function applyAutoBuild(){
       return {id:nid(),venue:gr.venue,court:gr.court,day:gr.franja.day,startHour:sh,pairs,
         matches:[
           {hour:sh,a:0,b:1,...blank()},
-          {hour:sh+1,a:2,b:null,...blank()},
-          {hour:sh+2,a:null,b:null,...blank()}
+          {hour:sh+1,a:2,b:0,...blank()},
+          {hour:sh+2,a:2,b:1,...blank()}
         ]};
     });
   });

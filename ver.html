@@ -389,6 +389,12 @@ input,select{font-family:inherit;font-size:16px}
 .sr-res.lose{background:#FDECEA;color:var(--alerta)}
 .sr-res.pend{background:var(--azul-suave);color:var(--gris)}
 .sr-none{text-align:center;padding:20px;color:var(--gris);font-size:14px;background:var(--azul-suave);border-radius:12px;margin-bottom:16px}
+.bmatch .bname{flex:1;min-width:0;font-size:13px;font-weight:700;color:var(--tinta);padding:7px 4px}
+.bmatch .bteam.bwin{background:#E5F5EC;border-radius:9px;padding:0 7px}
+.bmatch .bteam.bwin .bname{color:var(--ok);font-weight:800}
+.bmatch .bteam.blose{opacity:.45}
+.bmatch .bteam.blose .bname{text-decoration:line-through}
+.bwin-tick{flex-shrink:0;font-size:14px}
 </style>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -544,8 +550,9 @@ function hydrateBracket(raw){
     const b=raw[k]; if(!b||typeof b!=="object") return;
     const slot=s=>({name:(s&&s.name)||"",gid:s&&s.gid!==undefined?s.gid:null,
                     group:s&&s.group,bye:!!(s&&s.bye)});
-    const rounds=toArr(b.rounds).map(rd=>toArr(rd).map(m=>({a:slot(m&&m.a),b:slot(m&&m.b)})));
-    out[k]={size:b.size||2,rounds};
+    const r0=toArr(b.r0).map(m=>({a:slot(m&&m.a),b:slot(m&&m.b)}));
+    const winners=(b.winners&&typeof b.winners==="object")?b.winners:{};
+    if(r0.length) out[k]={size:b.size||2,r0,winners};
   });
   return out;
 }
@@ -966,21 +973,48 @@ function renderCruces(){
   else html+='<div class="mini-note">La llave se muestra acá cuando la organización la arma.</div>';
   cont.innerHTML=html;
 }
+function teamWinner(br,ri,mi,match){
+  const w=br.winners[ri+"-"+mi];
+  if(w==="a") return match.a;
+  if(w==="b") return match.b;
+  return null;
+}
+function computeRounds(br){
+  const rounds=[ br.r0.map(m=>({a:m.a,b:m.b})) ];
+  let ri=0;
+  while(rounds[ri].length>1){
+    const prev=rounds[ri], next=[];
+    for(let i=0;i<prev.length/2;i++){
+      const w1=teamWinner(br,ri,i*2,prev[i*2]);
+      const w2=teamWinner(br,ri,i*2+1,prev[i*2+1]);
+      next.push({a:w1||{name:""},b:w2||{name:""}});
+    }
+    rounds.push(next); ri++;
+  }
+  return rounds;
+}
 function roBracket(catId){
   const br=state.bracket[catId];
+  const rounds=computeRounds(br);
   const names=roundNames(br.size);
   let html='<div class="bracket">';
-  br.rounds.forEach((round,ri)=>{
+  rounds.forEach((round,ri)=>{
     html+='<div class="round"><div class="round-ttl">'+esc(names[ri]||("Ronda "+(ri+1)))+'</div>';
-    round.forEach(m=>{
-      const a=m.a&&m.a.name?m.a.name:"—", b=m.b&&m.b.name?m.b.name:"—";
-      html+='<div class="bmatch"><div class="bteam"><span class="nm" style="font-weight:700;font-size:13px">'+esc(a)+'</span></div>'+
-        '<div class="bvs">vs</div><div class="bteam"><span class="nm" style="font-weight:700;font-size:13px">'+esc(b)+'</span></div></div>';
+    round.forEach((m,mi)=>{
+      const w=br.winners[ri+"-"+mi];
+      const rowA=roBTeam(m.a,w==="a",w==="b");
+      const rowB=roBTeam(m.b,w==="b",w==="a");
+      html+='<div class="bmatch">'+rowA+'<div class="bvs">vs</div>'+rowB+'</div>';
     });
     html+='</div>';
   });
   html+='</div>';
   return html;
+}
+function roBTeam(team,isWin,isLose){
+  const nm=team&&team.name?team.name:"—";
+  let cls="bteam"+(isWin?" bwin":"")+(isLose?" blose":"");
+  return '<div class="'+cls+'"><span class="bname">'+esc(nm)+'</span>'+(isWin?'<span class="bwin-tick">🏆</span>':'')+'</div>';
 }
 </script>
 <script>
