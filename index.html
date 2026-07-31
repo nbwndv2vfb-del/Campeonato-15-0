@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Campeonato 15/0</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <style>
 :root{
   --francia:#0055A4;
@@ -1486,6 +1489,12 @@ function renderSync(){
       '<div class="field"><label>Código activo</label><input class="code-big" value="'+esc(syncCode)+'" readonly></div>'+
       '<div class="status-line ok">🟢 Sincronizando en vivo</div>'+
       '<div style="margin-top:14px"><button class="btn danger wide" onclick="disconnectSync()">Desconectar (usar solo este celular)</button></div></div>';
+    // link del visor (solo lectura) para compartir con los jugadores
+    const vlink=viewerLink();
+    html+='<div class="sync-card"><h3>Link para los jugadores 👀</h3>'+
+      '<p>Este link es de <b>solo ver</b>: muestra partidos, resultados y cruces en vivo, sin poder editar nada. Compartilo con los jugadores.</p>'+
+      '<div class="field"><label>Link solo lectura</label><input id="viewerLinkInput" value="'+esc(vlink)+'" readonly style="font-size:12px"></div>'+
+      '<button class="btn ghost wide" onclick="copyViewerLink()">📋 Copiar link</button></div>';
   }else{
     html+='<div class="sync-card"><h3>Activar sincronización</h3>'+
       '<p>Elegí un código (como una contraseña del torneo). Todos los que pongan el mismo código comparten los datos. Ej: <b>pando2026</b>.</p>'+
@@ -1493,6 +1502,19 @@ function renderSync(){
       '<button class="btn wide" onclick="connectSync(document.getElementById(\'syncCodeInput\').value)">🔗 Conectar</button></div>';
   }
   cont.innerHTML=html;
+}
+function viewerLink(){
+  let path=location.pathname.replace(/[^\/]*\.html$/,"");
+  if(!path.endsWith("/")) path+="/";
+  return location.origin+path+"ver.html?sala="+encodeURIComponent(syncCode||"");
+}
+function copyViewerLink(){
+  const el=document.getElementById("viewerLinkInput");
+  const txt=el?el.value:viewerLink();
+  const done=()=>toast("Link copiado");
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(done).catch(()=>{ if(el){el.select();document.execCommand("copy");done();} });
+  }else if(el){ el.select(); document.execCommand("copy"); done(); }
 }
 
 /* ============================================================
