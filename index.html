@@ -325,6 +325,23 @@ input,select{font-family:inherit;font-size:16px}
 .pend-go{flex-shrink:0;font-size:12px;font-weight:800;color:var(--francia)}
 .pend-ok{font-size:13px;font-weight:700;color:var(--ok);background:#E5F5EC;border-radius:12px;padding:11px 14px;margin-bottom:16px;text-align:center}
 .pend-mini{background:#FFF7EB;border:1.5px solid #E8A33D;color:#9A5B00;border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px}
+/* grilla de disponibilidad de canchas */
+.ch-summary{font-size:12px;font-weight:700;color:var(--gris);margin-bottom:12px;display:flex;align-items:center;flex-wrap:wrap}
+.ch-dot{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:4px;vertical-align:middle}
+.ch-dot.busy{background:var(--francia)}
+.ch-dot.free{background:#D6F5E3;border:1px solid #9BE0BB}
+.ch-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px;border:1.5px solid var(--linea)}
+.ch-grid{width:100%;border-collapse:collapse;background:#fff;min-width:340px}
+.ch-grid th{background:var(--francia);color:#fff;font-size:10px;font-weight:800;padding:7px 3px;text-align:center;line-height:1.15;border-right:1px solid rgba(255,255,255,.15)}
+.ch-grid th.ch-corner{background:var(--francia-osc);font-size:10px}
+.ch-grid td{border-top:1px solid var(--linea);border-right:1px solid var(--linea);text-align:center;padding:0}
+.ch-grid .ch-hour{background:var(--azul-suave);font-weight:900;font-size:13px;color:var(--francia-osc);padding:8px 6px;white-space:nowrap}
+.ch-cell{height:38px;font-size:12px;font-weight:800}
+.ch-cell.free{background:#EAFBF1}
+.ch-cell.busy{background:var(--francia);color:#fff}
+.ch-cell.busy .ch-cat{color:#fff}
+.ch-cell.conflict{background:var(--alerta)}
+.ch-cat{font-size:11px;font-weight:800}
 
 /* ===== SYNC ===== */
 .sync-card{background:#fff;border:1.5px solid var(--linea);border-radius:var(--r);padding:18px;margin-bottom:16px;box-shadow:var(--sombra)}
@@ -352,10 +369,10 @@ input,select{font-family:inherit;font-size:16px}
   box-shadow:0 -2px 14px rgba(0,40,90,.08);
 }
 .tab{
-  flex:1;background:none;padding:6px 2px;display:flex;flex-direction:column;align-items:center;gap:2px;
-  color:var(--gris-claro);font-size:9.5px;font-weight:800;
+  flex:1;min-width:0;background:none;padding:6px 1px;display:flex;flex-direction:column;align-items:center;gap:2px;
+  color:var(--gris-claro);font-size:9px;font-weight:800;
 }
-.tab .ti{font-size:20px;line-height:1}
+.tab .ti{font-size:19px;line-height:1}
 .tab.active{color:var(--francia)}
 
 /* ===== TOAST ===== */
@@ -427,6 +444,13 @@ input,select{font-family:inherit;font-size:16px}
   <div id="crucesContent"></div>
 </div>
 
+<!-- ===== CANCHAS (disponibilidad domingo) ===== -->
+<div class="view" id="view-canchas">
+  <h2 class="view-title">Disponibilidad de canchas</h2>
+  <div class="view-desc">Domingo, hora por hora. Se ocupa solo a medida que asignás horario y cancha en las llaves de Cruces.</div>
+  <div id="canchasContent"></div>
+</div>
+
 <!-- ===== INSCRIPCION ===== -->
 <div class="view" id="view-inscripcion">
   <h2 class="view-title">Inscripción y disponibilidad</h2>
@@ -457,6 +481,7 @@ input,select{font-family:inherit;font-size:16px}
   <button class="tab" data-v="categoria" onclick="go('categoria')"><span class="ti">🎾</span>Categorías</button>
   <button class="tab" data-v="horarios" onclick="go('horarios')"><span class="ti">🕐</span>Horarios</button>
   <button class="tab" data-v="cruces" onclick="go('cruces')"><span class="ti">🏆</span>Cruces</button>
+  <button class="tab" data-v="canchas" onclick="go('canchas')"><span class="ti">🗓️</span>Canchas</button>
   <button class="tab" data-v="sync" onclick="go('sync')"><span class="ti">🔗</span>Sync</button>
 </div>
 
@@ -803,13 +828,14 @@ function renderView(v){
   else if(v==="categoria") renderCategoria();
   else if(v==="horarios") renderHorarios();
   else if(v==="cruces") renderCruces();
+  else if(v==="canchas") renderCanchas();
   else if(v==="inscripcion") renderInscripcion();
   else if(v==="armar") renderArmar();
   else if(v==="sync") renderSync();
 }
 function renderAll(){
   renderInicio(); renderCategoria(); renderHorarios();
-  renderCruces(); renderInscripcion(); renderArmar(); renderSync();
+  renderCruces(); renderCanchas(); renderInscripcion(); renderArmar(); renderSync();
   applyLogo();
 }
 
@@ -1543,6 +1569,75 @@ function fallbackCopyText(text,done){
     document.body.appendChild(ta); ta.focus(); ta.select();
     document.execCommand("copy"); document.body.removeChild(ta); done();
   }catch(e){ toast("No se pudo copiar"); }
+}
+
+/* ============================================================
+   DISPONIBILIDAD DE CANCHAS (domingo)
+   ============================================================ */
+const DOM_HORAS=[10,11,12,13,14,15,16,17,18,19,20,21,22];
+const CANCHAS_LIST=[
+  {venue:"15/0",court:1,label:"15/0<br>C1"},
+  {venue:"15/0",court:2,label:"15/0<br>C2"},
+  {venue:"15/0",court:3,label:"15/0<br>C3"},
+  {venue:"La Pascuala",court:1,label:"Pascuala<br>C1"},
+  {venue:"La Pascuala",court:2,label:"Pascuala<br>C2"}
+];
+function catShort(name){
+  const map={"Segunda":"2ª","Tercera":"3ª","Cuarta":"4ª","Quinta":"5ª","Sexta":"6ª","Séptima":"7ª"};
+  return map[name]||name.slice(0,3);
+}
+// Recorre las llaves y arma qué ocupa cada cancha/hora
+function collectCourtUsage(){
+  const usage={}; // "venue||court||hora" -> [ {cat, round} ]
+  state.categories.forEach(cat=>{
+    const br=state.bracket[cat.id];
+    if(!br||!br.slots) return;
+    const rnames=roundNames(br.size);
+    Object.keys(br.slots).forEach(key=>{
+      const s=br.slots[key];
+      if(!s || !s.venue || s.court===undefined || s.court===null || s.court==="" || !s.hour) return;
+      const h=parseInt(String(s.hour),10);
+      if(isNaN(h)) return;
+      const uk=s.venue+"||"+s.court+"||"+h;
+      const ri=parseInt((key.split("-")[0])||"0",10);
+      (usage[uk]=usage[uk]||[]).push({cat:cat.name, round:rnames[ri]||"", hourText:s.hour});
+    });
+  });
+  return usage;
+}
+function renderCanchas(){
+  const cont=document.getElementById("canchasContent");
+  if(!cont) return;
+  const usage=collectCourtUsage();
+  const totalBusy=Object.values(usage).reduce((a,u)=>a+u.length,0);
+  let html='';
+  // resumen
+  const libres = DOM_HORAS.length*CANCHAS_LIST.length - Object.keys(usage).length;
+  html+='<div class="ch-summary"><span class="ch-dot busy"></span>Ocupado &nbsp;&nbsp;<span class="ch-dot free"></span>Libre &nbsp;·&nbsp; '+totalBusy+' partido'+(totalBusy===1?"":"s")+' asignado'+(totalBusy===1?"":"s")+'</div>';
+  html+='<div class="ch-wrap"><table class="ch-grid"><thead><tr><th class="ch-corner">Hora</th>';
+  CANCHAS_LIST.forEach(c=> html+='<th>'+c.label+'</th>');
+  html+='</tr></thead><tbody>';
+  DOM_HORAS.forEach(h=>{
+    html+='<tr><td class="ch-hour">'+h+'</td>';
+    CANCHAS_LIST.forEach(c=>{
+      const u=usage[c.venue+"||"+c.court+"||"+h];
+      if(u && u.length){
+        const conflict=u.length>1;
+        const txt=u.map(x=>catShort(x.cat)).join(" / ");
+        html+='<td class="ch-cell busy'+(conflict?" conflict":"")+'"><span class="ch-cat">'+esc(txt)+'</span></td>';
+      }else{
+        html+='<td class="ch-cell free"></td>';
+      }
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table></div>';
+  if(totalBusy===0){
+    html+='<div class="mini-note">Todavía no asignaste horarios a los cruces. Andá a <b>Cruces</b>, generá la llave y poné hora y cancha en cada partido: acá vas a ver cómo se ocupan las canchas.</div>';
+  }else{
+    html+='<div class="mini-note">Las verdes están libres. Si dos partidos quedan en la misma cancha y hora, la celda se pone en rojo (choque).</div>';
+  }
+  cont.innerHTML=html;
 }
 </script>
 <script>
