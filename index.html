@@ -532,7 +532,7 @@ function seedCategories(){
 }
 
 /* ---------- ESTADO ---------- */
-let state = { logo:null, categories:seedCategories(), inscripcion:[], bracket:{} };
+let state = { logo:null, mfmt:2, categories:seedCategories(), inscripcion:[], bracket:{} };
 let currentCat = null;   // id de categoría en vista Categorías
 let currentCruce = null; // id de categoría en vista Cruces
 let syncCode = null;
@@ -630,6 +630,14 @@ function hydrateState(raw){
     bracket: hydrateBracket(raw.bracket)
   };
 }
+/* Serialización estable: ordena las claves para comparar dos estados
+   sin que el orden de propiedades afecte (evita re-render por "falso cambio"). */
+function stableStr(o){
+  if(o===null||typeof o!=="object") return JSON.stringify(o);
+  if(Array.isArray(o)) return "["+o.map(stableStr).join(",")+"]";
+  return "{"+Object.keys(o).sort().map(k=>JSON.stringify(k)+":"+stableStr(o[k])).join(",")+"}";
+}
+function sameState(a,b){ return stableStr(a)===stableStr(b); }
 
 /* ---------- GUARDAR (local + firebase) ---------- */
 let saveTimer=null;
@@ -1627,7 +1635,7 @@ function connectSync(code){
     dbRef.on("value",s=>{
       if(!s.exists())return;
       const incoming=hydrateState(s.val());
-      if(JSON.stringify(incoming)===JSON.stringify(state)) return; // fue mi propio cambio
+      if(sameState(incoming,state)) return; // fue mi propio cambio (ignora orden de claves)
       applyingRemote=true;
       state=incoming;
       applyingRemote=false;
