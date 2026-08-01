@@ -644,6 +644,33 @@ function stableStr(o){
   return "{"+Object.keys(o).sort().map(k=>JSON.stringify(k)+":"+stableStr(o[k])).join(",")+"}";
 }
 function sameState(a,b){ return stableStr(a)===stableStr(b); }
+/* Combina resultados de dos estados: si en 'base' un partido no tiene resultado
+   pero en 'other' sí, lo copia. Nunca borra un resultado ya cargado.
+   Así, al reconectar o al recibir un cambio remoto, no se pierde lo último cargado. */
+function mergeResults(base,other){
+  if(!other||!base) return base;
+  base.categories.forEach(cat=>{
+    const oCat=other.categories.find(c=>c.id===cat.id); if(!oCat) return;
+    cat.groups.forEach(g=>{
+      const oG=oCat.groups.find(x=>x.id===g.id); if(!oG) return;
+      g.matches.forEach((m,i)=>{
+        const om=oG.matches[i]; if(!om) return;
+        if(!matchPlayed(m) && matchPlayed(om)){
+          m.a=om.a; m.b=om.b;
+          m.s1=(om.s1||[null,null]).slice();
+          m.s2=(om.s2||[null,null]).slice();
+          m.stb=(om.stb||[null,null]).slice();
+        }
+      });
+    });
+  });
+  return base;
+}
+function countResults(st){
+  let n=0;
+  (st.categories||[]).forEach(c=>c.groups.forEach(g=>g.matches.forEach(m=>{ if(matchPlayed(m)) n++; })));
+  return n;
+}
 
 /* ---------- GUARDAR (local + firebase) ---------- */
 let saveTimer=null;
@@ -1731,37 +1758,42 @@ function connectSync(code){
   syncCode=code;
   if(dbRef) dbRef.off();
   dbRef=db.ref("torneos/"+code);
-  // primera lectura: comparo con lo local para no perder el último cambio
+  // primera lectura: combino local + remoto para no perder ningún resultado
   dbRef.once("value").then(snap=>{
     const remote = snap.exists() ? hydrateState(snap.val()) : null;
     const remoteGroups = remote ? remote.categories.reduce((a,c)=>a+c.groups.length,0) : 0;
-    const localTime = state.updatedAt||0;
-    const remoteTime = remote ? (remote.updatedAt||0) : 0;
-    if(remote && remoteGroups>0 && remoteTime>=localTime){
-      // el remoto está igual o más al día: lo tomo
+    if(remote && remoteGroups>0){
+      const localTime=state.updatedAt||0, remoteTime=remote.updatedAt||0;
+      // base = el más al día; luego completo con los resultados del otro
+      const base = (remoteTime>=localTime) ? remote : state;
+      const other = (remoteTime>=localTime) ? state : remote;
+      mergeResults(base, other);
       applyingRemote=true;
-      state=remote;
+      state=base;
       applyingRemote=false;
-      renderAll(); toast("Conectado — datos cargados");
-    }else if(remote && remoteGroups>0 && localTime>remoteTime){
-      // mi copia local tiene cambios más nuevos que no se alcanzaron a subir: los subo
-      applyingRemote=true; dbRef.set(state); applyingRemote=false;
-      renderAll(); toast("Conectado — subí tus últimos cambios");
+      try{ dbRef.set(state); }catch(e){}   // dejo el combinado en Firebase
+      renderAll(); toast("Conectado — datos al día");
     }else{
       // sala nueva o sin grupos: subo lo de este dispositivo (no piso nada)
       applyingRemote=true; dbRef.set(state); applyingRemote=false;
       toast("Conectado — sala creada con tus datos");
     }
-    // escucha en vivo (ignora el "eco" de mis propios cambios y los remotos viejos)
+    // escucha en vivo: combina resultados en lugar de pisar
     dbRef.on("value",s=>{
       if(!s.exists())return;
       const incoming=hydrateState(s.val());
-      if(sameState(incoming,state)) return; // fue mi propio cambio
-      if((incoming.updatedAt||0) < (state.updatedAt||0)) return; // remoto más viejo que lo mío: no piso
+      if(sameState(incoming,state)) return; // idéntico, nada que hacer
+      const incomingNewer=(incoming.updatedAt||0) >= (state.updatedAt||0);
+      const base = incomingNewer ? incoming : state;
+      const other = incomingNewer ? state : incoming;
+      mergeResults(base, other);
+      const changed=!sameState(base,state);
       applyingRemote=true;
-      state=incoming;
+      state=base;
       applyingRemote=false;
-      renderAll();
+      if(changed) renderAll();
+      // si el combinado tiene algo que el remoto no tenía, lo subo para consolidar
+      if(!sameState(base,incoming)){ try{ dbRef.set(state); }catch(e){} }
     });
     setSyncDot("on"); saveLocal(); renderSync();
   }).catch(e=>{ toast("Error de conexión"); renderSync(); });
