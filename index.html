@@ -494,9 +494,9 @@ function mkGroup(venue,court,day,startHour,trio){
   const pairs=[mkPair(trio[0][0],trio[0][1]),mkPair(trio[1][0],trio[1][1]),mkPair(trio[2][0],trio[2][1])];
   const blank=()=>({s1:[null,null],s2:[null,null],stb:[null,null]});
   const matches=[
-    {hour:startHour,   a:0, b:1, ...blank()}, // P1: pareja 1 vs pareja 2 (descansa la 3)
-    {hour:startHour+1, a:2, b:0, ...blank()}, // P2: pareja 3 vs pareja 1
-    {hour:startHour+2, a:2, b:1, ...blank()}  // P3: pareja 3 vs pareja 2
+    {hour:startHour,   a:0, b:1,    ...blank()}, // P1: pareja 1 vs pareja 2 (descansa la 3)
+    {hour:startHour+1, a:2, b:null, ...blank()}, // P2: pareja 3 vs (a definir)
+    {hour:startHour+2, a:2, b:null, ...blank()}  // P3: pareja 3 vs (a definir)
   ];
   return {id:nid(),venue,court,day,startHour,pairs,matches};
 }
@@ -588,7 +588,7 @@ function hydrateGroup(g){
   let pairs=toArr(g.pairs).map(hydratePair);
   while(pairs.length<3) pairs.push(hydratePair(null));
   const sh=(g.startHour===undefined||g.startHour===null)?10:g.startHour;
-  const defA=[0,2,2], defB=[1,0,1];
+  const defA=[0,2,2], defB=[1,null,null];
   let matches=toArr(g.matches).map((m,i)=>hydrateMatch(m,sh+i));
   while(matches.length<3){
     const i=matches.length;
@@ -620,6 +620,7 @@ function hydrateState(raw){
   raw=raw||{};
   return {
     logo: raw.logo || null,
+    mfmt: raw.mfmt || 1,
     categories: toArr(raw.categories).map(hydrateCat),
     inscripcion: toArr(raw.inscripcion).map(p=>({
       id:(p&&p.id)||nid(), catId:(p&&p.catId)||null,
@@ -824,6 +825,8 @@ function renderCategoria(){
       '<button class="btn" onclick="addGroup(\''+cat.id+'\')">＋ Agregar primer grupo</button></div>';
     return;
   }
+  // arreglo único de grupos autocompletados con la versión anterior
+  if(migrateMatchFormat()) save();
   // completar partidos de grupos ya cargados (P2/P3 que hayan quedado a definir)
   let filled=false;
   cat.groups.forEach(g=>{ if(autoFillMatches(g)) filled=true; });
@@ -1011,25 +1014,38 @@ function addGroup(catId){
   const g={id:nid(),venue:"15/0",court:1,day:"Sábado",startHour:10,
     pairs:[mkPair("",""),mkPair("",""),mkPair("","")],
     matches:[
-      {hour:10,a:0,b:1,...blank()}, // P1: pareja 1 vs pareja 2
-      {hour:11,a:2,b:0,...blank()}, // P2: pareja 3 vs pareja 1
-      {hour:12,a:2,b:1,...blank()}  // P3: pareja 3 vs pareja 2
+      {hour:10,a:0,b:1,...blank()},    // P1: pareja 1 vs pareja 2
+      {hour:11,a:2,b:null,...blank()}, // P2: pareja 3 vs (a definir)
+      {hour:12,a:2,b:null,...blank()}  // P3: pareja 3 vs (a definir)
     ]};
   c.groups.push(g); currentCat=catId; save(); renderCategoria(); renderInicio();
   toast("Grupo agregado");
 }
-/* Completa automáticamente las parejas de los 3 partidos (round-robin):
-   P1 = 1 vs 2, P2 = 3 vs 1, P3 = 3 vs 2. Solo rellena lo que esté vacío,
-   así no pisa cambios hechos a mano ni partidos ya jugados. */
+/* Completa automáticamente lo fijo de cada partido:
+   P1 = pareja1 vs pareja2, y en P2 y P3 pone la pareja 3 (la que descansa),
+   dejando el RIVAL a definir. Solo rellena lo vacío, sin pisar cambios a mano. */
 function autoFillMatches(g){
-  const defA=[0,2,2], defB=[1,0,1];
+  const defA=[0,2,2], defB=[1,null,null]; // rival de P2/P3 queda a definir
   let changed=false;
   for(let i=0;i<3;i++){
     const m=g.matches[i]; if(!m)continue;
-    if(m.a===null||m.a===undefined){ m.a=defA[i]; changed=true; }
-    if(m.b===null||m.b===undefined){ m.b=defB[i]; changed=true; }
+    if((m.a===null||m.a===undefined) && defA[i]!==null){ m.a=defA[i]; changed=true; }
+    if((m.b===null||m.b===undefined) && defB[i]!==null){ m.b=defB[i]; changed=true; }
   }
   return changed;
+}
+/* Un solo arreglo para grupos que ya se autocompletaron con el rival puesto
+   en la versión anterior: vuelve el rival de P2/P3 a "a definir" si ese
+   partido todavía no tiene resultado. Corre una única vez. */
+function migrateMatchFormat(){
+  if(state.mfmt>=2) return false;
+  state.categories.forEach(cat=>cat.groups.forEach(g=>{
+    const m1=g.matches[1], m2=g.matches[2];
+    if(m1 && m1.a===2 && m1.b===0 && !matchPlayed(m1)) m1.b=null;
+    if(m2 && m2.a===2 && m2.b===1 && !matchPlayed(m2)) m2.b=null;
+  }));
+  state.mfmt=2;
+  return true;
 }
 function delGroup(catId,gid){
   const c=catById(catId); if(!c)return;
@@ -1557,8 +1573,8 @@ function applyAutoBuild(){
       return {id:nid(),venue:gr.venue,court:gr.court,day:gr.franja.day,startHour:sh,pairs,
         matches:[
           {hour:sh,a:0,b:1,...blank()},
-          {hour:sh+1,a:2,b:0,...blank()},
-          {hour:sh+2,a:2,b:1,...blank()}
+          {hour:sh+1,a:2,b:null,...blank()},
+          {hour:sh+2,a:2,b:null,...blank()}
         ]};
     });
   });
