@@ -536,7 +536,7 @@ function seedCategories(){
 }
 
 /* ---------- ESTADO ---------- */
-let state = { logo:null, mfmt:2, categories:seedCategories(), inscripcion:[], bracket:{} };
+let state = { logo:null, mfmt:2, updatedAt:0, categories:seedCategories(), inscripcion:[], bracket:{} };
 let currentCat = null;   // id de categoría en vista Categorías
 let currentCruce = null; // id de categoría en vista Cruces
 let syncCode = null;
@@ -626,6 +626,7 @@ function hydrateState(raw){
   return {
     logo: raw.logo || null,
     mfmt: raw.mfmt || 1,
+    updatedAt: raw.updatedAt || 0,
     categories: toArr(raw.categories).map(hydrateCat),
     inscripcion: toArr(raw.inscripcion).map(p=>({
       id:(p&&p.id)||nid(), catId:(p&&p.catId)||null,
@@ -647,11 +648,17 @@ function sameState(a,b){ return stableStr(a)===stableStr(b); }
 /* ---------- GUARDAR (local + firebase) ---------- */
 let saveTimer=null;
 function save(pushRemote=true){
+  state.updatedAt=Date.now(); // marca de cuándo fue el último cambio
   saveLocal();
   if(pushRemote && dbRef && !applyingRemote){
     clearTimeout(saveTimer);
     saveTimer=setTimeout(()=>{ try{ dbRef.set(state); }catch(e){} }, 350);
   }
+}
+// Fuerza subir cualquier cambio pendiente ya mismo (al salir/ocultar la app)
+function flushSave(){
+  if(saveTimer){ clearTimeout(saveTimer); saveTimer=null; }
+  if(dbRef && !applyingRemote){ try{ dbRef.set(state); }catch(e){} }
 }
 </script>
 <script>
@@ -1724,25 +1731,33 @@ function connectSync(code){
   syncCode=code;
   if(dbRef) dbRef.off();
   dbRef=db.ref("torneos/"+code);
-  // primera lectura: si hay datos remotos, los tomo; si no, subo los míos
+  // primera lectura: comparo con lo local para no perder el último cambio
   dbRef.once("value").then(snap=>{
     const remote = snap.exists() ? hydrateState(snap.val()) : null;
     const remoteGroups = remote ? remote.categories.reduce((a,c)=>a+c.groups.length,0) : 0;
-    if(remote && remoteGroups>0){
+    const localTime = state.updatedAt||0;
+    const remoteTime = remote ? (remote.updatedAt||0) : 0;
+    if(remote && remoteGroups>0 && remoteTime>=localTime){
+      // el remoto está igual o más al día: lo tomo
       applyingRemote=true;
       state=remote;
       applyingRemote=false;
       renderAll(); toast("Conectado — datos cargados");
+    }else if(remote && remoteGroups>0 && localTime>remoteTime){
+      // mi copia local tiene cambios más nuevos que no se alcanzaron a subir: los subo
+      applyingRemote=true; dbRef.set(state); applyingRemote=false;
+      renderAll(); toast("Conectado — subí tus últimos cambios");
     }else{
       // sala nueva o sin grupos: subo lo de este dispositivo (no piso nada)
       applyingRemote=true; dbRef.set(state); applyingRemote=false;
       toast("Conectado — sala creada con tus datos");
     }
-    // escucha en vivo (ignora el "eco" de mis propios cambios)
+    // escucha en vivo (ignora el "eco" de mis propios cambios y los remotos viejos)
     dbRef.on("value",s=>{
       if(!s.exists())return;
       const incoming=hydrateState(s.val());
-      if(sameState(incoming,state)) return; // fue mi propio cambio (ignora orden de claves)
+      if(sameState(incoming,state)) return; // fue mi propio cambio
+      if((incoming.updatedAt||0) < (state.updatedAt||0)) return; // remoto más viejo que lo mío: no piso
       applyingRemote=true;
       state=incoming;
       applyingRemote=false;
@@ -1804,6 +1819,10 @@ function init(){
   go("inicio");
   if(syncCode && configComplete()){ connectSync(syncCode); }
   else setSyncDot("local");
+  // al salir o minimizar la app, subir de inmediato lo que quedó pendiente
+  document.addEventListener("visibilitychange",()=>{ if(document.hidden) flushSave(); });
+  window.addEventListener("pagehide", flushSave);
+  window.addEventListener("beforeunload", flushSave);
 }
 init();
 </script>
