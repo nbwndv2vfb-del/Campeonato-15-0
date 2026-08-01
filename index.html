@@ -305,6 +305,10 @@ input,select{font-family:inherit;font-size:16px}
 .bwin-btn{flex-shrink:0;background:var(--azul-suave);border-radius:9px;padding:6px 9px;font-size:15px;line-height:1;filter:grayscale(1);opacity:.45;transition:all .12s}
 .bwin-btn.on{filter:none;opacity:1;background:#CFF3E0;box-shadow:0 0 0 2px rgba(30,142,90,.3)}
 .bwin-btn:active{transform:scale(.9)}
+.bslot{display:flex;gap:8px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--linea)}
+.bslot-i{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--gris);flex:1;min-width:0}
+.bslot-i input{width:100%;min-width:0;border:1.5px solid var(--linea);border-radius:7px;padding:5px 7px;font-size:12px;font-weight:700;color:var(--francia-osc)}
+.bslot-i select{width:100%;min-width:0;border:1.5px solid var(--linea);border-radius:7px;padding:5px;font-size:12px;font-weight:700;color:var(--francia-osc);background:#fff}
 /* aviso de resultados pendientes */
 .pend-banner{border-radius:12px;margin-bottom:16px;overflow:hidden;border:1.5px solid var(--linea);background:#fff;box-shadow:var(--sombra)}
 .pend-banner.alert{border-color:#E8A33D;background:#FFF7EB}
@@ -611,7 +615,8 @@ function hydrateBracket(raw){
                     group:s&&s.group,bye:!!(s&&s.bye)});
     const r0=toArr(b.r0).map(m=>({a:slot(m&&m.a),b:slot(m&&m.b)}));
     const winners=(b.winners&&typeof b.winners==="object")?b.winners:{};
-    if(r0.length) out[k]={size:b.size||2,r0,winners};
+    const slots=(b.slots&&typeof b.slots==="object")?b.slots:{};
+    if(r0.length) out[k]={size:b.size||2,r0,winners,slots};
     // (llaves con el formato viejo se ignoran; se regeneran con un toque)
   });
   return out;
@@ -1263,7 +1268,7 @@ function generateBracket(catId){
     if(m.a.bye && !m.b.bye) winners["0-"+mi]="b";
     else if(m.b.bye && !m.a.bye) winners["0-"+mi]="a";
   });
-  state.bracket[catId]={size:S,r0,winners};
+  state.bracket[catId]={size:S,r0,winners,slots:{}};
   save(); renderCruces(); toast("Llave generada");
 }
 
@@ -1346,6 +1351,8 @@ function renderCruces(){
           '<button class="btn danger sm" onclick="clearBracket(\''+currentCruce+'\')">Borrar llave</button></div>';
     html+='<div class="mini-note" style="margin-bottom:12px">Tocá el 🏆 de la pareja que ganó cada partido. El ganador pasa solo a la ronda siguiente; el que pierde queda afuera. En la primera ronda podés cambiar las parejas con los desplegables.</div>';
     html+=bracketHTML(currentCruce);
+    html+='<button class="btn wide" style="margin-top:16px;background:#25D366" onclick="copyWhatsapp(\''+currentCruce+'\')">📋 Copiar mensaje para WhatsApp</button>';
+    html+='<div class="mini-note">Poné antes el horario y la cancha de cada partido. El mensaje toma esos datos y arma el texto listo para pegar en el grupo de la categoría.</div>';
   }
   cont.innerHTML=html;
 }
@@ -1390,6 +1397,7 @@ function bracketHTML(catId){
         '<div class="bvs">vs</div>'+
         bTeamRow(catId,ri,mi,"b",m.b,w,isR0,clash)+
         (clash?'<div class="clash">⚠️ Mismo grupo — cambialas si podés</div>':"")+
+        bSlotRow(catId,ri,mi)+
         '</div>';
     });
     html+='</div>';
@@ -1402,6 +1410,105 @@ function editR0Slot(catId,mi,side,val){
   const [name,gid]=val.split("||");
   br.r0[mi][side]={name:name||"",gid:gid==="bye"?null:gid,bye:name==="BYE"};
   save(); renderCruces();
+}
+// Fila de horario + cancha (editable) de un partido de la llave
+function courtOptionsSlot(venue,court){
+  let o='<option value="">— cancha —</option>';
+  SEDES.forEach(s=>CANCHAS[s].forEach(c=>{
+    const val=s+"||"+c, sel=(s===venue&&c===court)?" selected":"";
+    o+='<option value="'+val+'"'+sel+'>'+s+' C'+c+'</option>';
+  }));
+  return o;
+}
+function bSlotRow(catId,ri,mi){
+  const br=state.bracket[catId];
+  const s=(br.slots&&br.slots[ri+"-"+mi])||{};
+  return '<div class="bslot">'+
+    '<span class="bslot-i">🕐 <input type="text" value="'+esc(s.hour||"")+'" placeholder="hora" onchange="setSlotField(\''+catId+'\','+ri+','+mi+',\'hour\',this.value)"></span>'+
+    '<span class="bslot-i">📍 <select onchange="setSlotField(\''+catId+'\','+ri+','+mi+',\'court\',this.value)">'+courtOptionsSlot(s.venue,s.court)+'</select></span>'+
+    '</div>';
+}
+function setSlotField(catId,ri,mi,field,val){
+  const br=state.bracket[catId]; if(!br)return;
+  if(!br.slots) br.slots={};
+  const key=ri+"-"+mi, s=br.slots[key]||{};
+  if(field==="court"){
+    if(val===""){ delete s.venue; delete s.court; }
+    else { const [venue,court]=val.split("||"); s.venue=venue; s.court=Number(court); }
+  }else{
+    s[field]=val;
+  }
+  br.slots[key]=s;
+  save(); // el campo ya muestra el valor; no hace falta redibujar
+}
+
+/* ---- Mensaje para WhatsApp con la llave del domingo ---- */
+function venueNameMsg(v){
+  if(v==="15/0") return "QUINCE CERO";
+  if(v==="La Pascuala") return "LA PASCUALA";
+  return (v||"").toUpperCase();
+}
+function slotOf(br,ri,mi){ return (br.slots&&br.slots[ri+"-"+mi])||{}; }
+// Nombre a mostrar para un lado del partido (nombre real o "Ganador Cancha X")
+function teamLabelMsg(br,rounds,ri,mi,side){
+  const m=rounds[ri][mi];
+  const team=side==="a"?m.a:m.b;
+  if(team && team.name && team.name!=="BYE") return team.name;
+  if(ri>0){
+    const prevMi = side==="a" ? mi*2 : mi*2+1;
+    const ps=slotOf(br,ri-1,prevMi);
+    if(ps.court) return "Ganador Cancha "+ps.court;
+    return "Ganador (a confirmar)";
+  }
+  return "A definir";
+}
+function buildWhatsappMessage(catId){
+  const cat=catById(catId), br=state.bracket[catId];
+  if(!cat||!br) return "";
+  const rounds=computeRounds(br);
+  const names=roundNames(br.size);
+  const L=[];
+  L.push("🎾 *"+cat.name.toUpperCase()+" — Cruces del domingo*");
+  L.push("");
+  rounds.forEach((round,ri)=>{
+    // partidos que se juegan (sin byes)
+    const playable=round.map((m,mi)=>({m,mi})).filter(x=>!((x.m.a&&x.m.a.bye)||(x.m.b&&x.m.b.bye)));
+    if(playable.length===0) return;
+    // ¿sede única en la ronda?
+    const venues=new Set();
+    playable.forEach(({mi})=>{ const s=slotOf(br,ri,mi); if(s.venue) venues.add(s.venue); });
+    const single = venues.size===1 ? [...venues][0] : null;
+    let title="*"+(names[ri]||("Ronda "+(ri+1))).toUpperCase()+"*";
+    if(single) title+=" 📍"+venueNameMsg(single);
+    L.push(title); L.push("");
+    playable.forEach(({m,mi})=>{
+      const s=slotOf(br,ri,mi);
+      const hora = s.hour ? (s.hour+" hs aprox") : "Horario a confirmar";
+      let cancha="";
+      if(s.court) cancha = single ? "(Cancha "+s.court+")" : "("+venueNameMsg(s.venue)+" - Cancha "+s.court+")";
+      L.push(hora+(cancha?" "+cancha:""));
+      L.push("");
+      L.push(teamLabelMsg(br,rounds,ri,mi,"a")+" 🆚 "+teamLabelMsg(br,rounds,ri,mi,"b"));
+      L.push("");
+    });
+  });
+  return L.join("\n").trim();
+}
+function copyWhatsapp(catId){
+  const msg=buildWhatsappMessage(catId);
+  if(!msg){ toast("Generá la llave primero"); return; }
+  const done=()=>toast("Mensaje copiado ✓");
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(msg).then(done).catch(()=>fallbackCopyText(msg,done));
+  }else fallbackCopyText(msg,done);
+}
+function fallbackCopyText(text,done){
+  try{
+    const ta=document.createElement("textarea");
+    ta.value=text; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    document.execCommand("copy"); document.body.removeChild(ta); done();
+  }catch(e){ toast("No se pudo copiar"); }
 }
 </script>
 <script>

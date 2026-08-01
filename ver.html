@@ -395,6 +395,7 @@ input,select{font-family:inherit;font-size:16px}
 .bmatch .bteam.blose{opacity:.45}
 .bmatch .bteam.blose .bname{text-decoration:line-through}
 .bwin-tick{flex-shrink:0;font-size:14px}
+.bslot-ro{margin-top:7px;padding-top:7px;border-top:1px dashed var(--linea);font-size:12px;font-weight:800;color:var(--francia);text-align:center}
 </style>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -552,7 +553,8 @@ function hydrateBracket(raw){
                     group:s&&s.group,bye:!!(s&&s.bye)});
     const r0=toArr(b.r0).map(m=>({a:slot(m&&m.a),b:slot(m&&m.b)}));
     const winners=(b.winners&&typeof b.winners==="object")?b.winners:{};
-    if(r0.length) out[k]={size:b.size||2,r0,winners};
+    const slots=(b.slots&&typeof b.slots==="object")?b.slots:{};
+    if(r0.length) out[k]={size:b.size||2,r0,winners,slots};
   });
   return out;
 }
@@ -1004,7 +1006,15 @@ function roBracket(catId){
       const w=br.winners[ri+"-"+mi];
       const rowA=roBTeam(m.a,w==="a",w==="b");
       const rowB=roBTeam(m.b,w==="b",w==="a");
-      html+='<div class="bmatch">'+rowA+'<div class="bvs">vs</div>'+rowB+'</div>';
+      const s=(br.slots&&br.slots[ri+"-"+mi])||{};
+      let slotTxt="";
+      if(s.hour || s.venue){
+        const parts=[];
+        if(s.hour) parts.push("🕐 "+esc(s.hour)+"hs");
+        if(s.venue) parts.push("📍 "+esc(s.venue)+(s.court?" C"+s.court:""));
+        slotTxt='<div class="bslot-ro">'+parts.join(" · ")+'</div>';
+      }
+      html+='<div class="bmatch">'+rowA+'<div class="bvs">vs</div>'+rowB+slotTxt+'</div>';
     });
     html+='</div>';
   });
