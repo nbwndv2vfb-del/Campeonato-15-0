@@ -440,6 +440,8 @@ input,select{font-family:inherit;font-size:16px}
       <div class="section-label">Elegí tu categoría</div>
       <div class="cat-grid" id="homeCatGrid"></div>
     </div>
+    <button class="btn ghost wide" style="margin-top:22px" onclick="changeCode()">🔄 Cambiar código del torneo</button>
+    <p class="mini-note" id="verCodeNote" style="text-align:center"></p>
   </div>
 
   <!-- CATEGORIAS -->
@@ -733,6 +735,8 @@ function renderInicio(){
   const t1=document.getElementById("verTourn"), t2=document.getElementById("verTtl");
   if(t1) t1.textContent=nm;
   if(t2) t2.textContent=nm;
+  const note=document.getElementById("verCodeNote");
+  if(note) note.innerHTML = salaCode ? ("Viendo el torneo del código <b>"+esc(salaCode)+"</b>") : "";
   const grid=document.getElementById("homeCatGrid");
   if(!grid) return;
   grid.innerHTML="";
@@ -1038,6 +1042,7 @@ function connectRead(code){
   code=(code||"").trim().toLowerCase().replace(/\s+/g,"");
   if(!code) return false;
   salaCode=code;
+  try{ localStorage.setItem("ver_sala", code); }catch(e){} // recordar el último código
   try{
     if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     db=firebase.database();
@@ -1062,14 +1067,25 @@ function enterCode(){
   try{ history.replaceState(null,"","?sala="+encodeURIComponent(code)); }catch(e){}
   connectRead(code);
 }
+// Volver a la pantalla de código para cambiar de torneo
+function changeCode(){
+  const inp=document.getElementById("gateCode");
+  if(inp) inp.value=salaCode||"";
+  const app=document.getElementById("app"), gate=document.getElementById("gate");
+  if(app) app.classList.add("hidden");
+  if(gate) gate.classList.remove("hidden");
+}
 
 /* ===== Arranque ===== */
 function init(){
   applyLogo();
   const params=new URLSearchParams(location.search);
-  const sala=params.get("sala")||params.get("s");
-  if(sala){ connectRead(sala); }
-  else{
+  let sala=params.get("sala")||params.get("s");
+  if(!sala){ try{ sala=localStorage.getItem("ver_sala")||""; }catch(e){} } // recordar el último
+  if(sala){
+    try{ history.replaceState(null,"","?sala="+encodeURIComponent(sala)); }catch(e){}
+    connectRead(sala);
+  }else{
     document.getElementById("app").classList.add("hidden");
     document.getElementById("gate").classList.remove("hidden");
   }
