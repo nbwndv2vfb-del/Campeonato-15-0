@@ -417,7 +417,7 @@ input,select{font-family:inherit;font-size:16px}
   <div class="topbar">
     <div class="logo-slot" id="logoSlot"><img src=""></div>
     <div>
-      <div class="ttl">Campeonato 15/0</div>
+      <div class="ttl" id="verTtl">Campeonato 15/0</div>
       <div class="sub">Pando Padel · En vivo</div>
     </div>
     <div class="live-badge"><span class="pulse"></span>En vivo</div>
@@ -427,7 +427,7 @@ input,select{font-family:inherit;font-size:16px}
   <div class="view active" id="view-inicio">
     <div class="home-hero">
       <div class="biglogo" id="bigLogo"><img src=""></div>
-      <h1>Campeonato 15/0</h1>
+      <h1 id="verTourn">Campeonato 15/0</h1>
       <div class="tag">Pando Padel · Ruta 8 Km 29</div>
     </div>
     <div class="search-box">
@@ -563,6 +563,7 @@ function hydrateState(raw){
   raw=raw||{};
   return {
     logo: raw.logo || null,
+    tournamentName: raw.tournamentName || "Campeonato 15/0",
     categories: toArr(raw.categories).map(hydrateCat),
     inscripcion: toArr(raw.inscripcion).map(p=>({
       id:(p&&p.id)||nid(), catId:(p&&p.catId)||null,
@@ -728,6 +729,10 @@ function renderAll(){ applyLogo(); renderInicio(); renderCategoria(); renderHora
 
 /* ===== INICIO: grid de categorías + buscador ===== */
 function renderInicio(){
+  const nm=state.tournamentName||"Campeonato 15/0";
+  const t1=document.getElementById("verTourn"), t2=document.getElementById("verTtl");
+  if(t1) t1.textContent=nm;
+  if(t2) t2.textContent=nm;
   const grid=document.getElementById("homeCatGrid");
   if(!grid) return;
   grid.innerHTML="";

@@ -342,6 +342,20 @@ input,select{font-family:inherit;font-size:16px}
 .ch-cell.busy .ch-cat{color:#fff}
 .ch-cell.conflict{background:var(--alerta)}
 .ch-cat{font-size:11px;font-weight:800}
+.ch-cell{cursor:pointer}
+/* panel selector de cancha */
+.cp-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,30,60,.45);display:none;align-items:flex-end;justify-content:center}
+.cp-overlay.show{display:flex}
+.cp-box{background:#fff;width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:80vh;overflow-y:auto;box-shadow:0 -6px 30px rgba(0,30,60,.3)}
+.cp-head{font-size:16px;font-weight:900;color:var(--francia-osc);margin-bottom:12px}
+.cp-cur{font-size:11px;font-weight:800;text-transform:uppercase;color:var(--gris);margin-bottom:6px}
+.cp-curitem{display:flex;align-items:center;gap:8px;background:var(--azul-suave);border-radius:10px;padding:9px 12px;margin-bottom:8px;font-weight:700;font-size:14px}
+.cp-curitem span{flex:1}
+.cp-free{background:#fff;color:var(--alerta);border:1.5px solid var(--alerta);border-radius:8px;padding:6px 11px;font-size:12px;font-weight:800}
+.cp-label{font-size:11px;font-weight:800;text-transform:uppercase;color:var(--gris);margin:10px 0 8px}
+.cp-list{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cp-opt{background:#fff;border:1.5px solid var(--linea);border-radius:10px;padding:12px 8px;font-size:13px;font-weight:800;color:var(--francia-osc);text-align:center}
+.cp-opt:active{background:var(--azul-suave)}
 
 /* ===== SYNC ===== */
 .sync-card{background:#fff;border:1.5px solid var(--linea);border-radius:var(--r);padding:18px;margin-bottom:16px;box-shadow:var(--sombra)}
@@ -407,7 +421,7 @@ input,select{font-family:inherit;font-size:16px}
 <div class="view active" id="view-inicio">
   <div class="home-hero">
     <div class="biglogo" id="bigLogo"><img src=""></div>
-    <h1>Campeonato 15/0</h1>
+    <h1 id="homeTournName">Campeonato 15/0</h1>
     <div class="tag">Pando Padel · Ruta 8 Km 29</div>
   </div>
   <div id="homePending"></div>
@@ -415,10 +429,12 @@ input,select{font-family:inherit;font-size:16px}
   <div class="home-links">
     <div class="home-link" onclick="go('horarios')"><span class="ic">🕐</span> Ver por horario y cancha <span class="ar">›</span></div>
     <div class="home-link" onclick="go('cruces')"><span class="ic">🏆</span> Cruces del domingo <span class="ar">›</span></div>
+    <div class="home-link" onclick="go('canchas')"><span class="ic">🗓️</span> Disponibilidad de canchas <span class="ar">›</span></div>
     <div class="home-link" onclick="go('inscripcion')"><span class="ic">📝</span> Inscripción y disponibilidad <span class="ar">›</span></div>
-    <div class="home-link" onclick="go('armar')"><span class="ic">⚙️</span> Armar grupos automáticamente <span class="ar">›</span></div>
+    <div class="home-link" onclick="go('armar')"><span class="ic">⚙️</span> Armar grupos / importar <span class="ar">›</span></div>
   </div>
-  <p class="mini-note">Los cambios se guardan solos en este dispositivo. Para sincronizar con otros celulares, activá un código en la pestaña <b>Sync</b>.</p>
+  <button class="btn danger wide" style="margin-top:16px" onclick="newTournament()">🆕 Crear campeonato nuevo</button>
+  <p class="mini-note">Crear uno nuevo borra todas las parejas y resultados para empezar de cero (te pide confirmar). Los cambios se guardan solos; para sincronizar con otros celulares, activá un código en la pestaña <b>Sync</b>.</p>
 </div>
 
 <!-- ===== CATEGORIA ===== -->
@@ -463,8 +479,8 @@ input,select{font-family:inherit;font-size:16px}
 
 <!-- ===== ARMAR GRUPOS ===== -->
 <div class="view" id="view-armar">
-  <h2 class="view-title">Armar grupos automáticamente</h2>
-  <div class="view-desc">Genera grupos de 3 parejas respetando la disponibilidad horaria y las canchas.</div>
+  <h2 class="view-title">Armar grupos</h2>
+  <div class="view-desc">Pegá un grupo ya armado desde un mensaje, o generá los grupos automáticamente por disponibilidad.</div>
   <div id="armarContent"></div>
 </div>
 
@@ -486,6 +502,7 @@ input,select{font-family:inherit;font-size:16px}
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="cp-overlay" id="canchaPicker" onclick="closeCanchaPicker()"></div>
 
 <!-- Firebase (compat) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -559,9 +576,25 @@ function seedCategories(){
     ]},
   ];
 }
+// Categorías vacías (para arrancar un campeonato nuevo de cero)
+function emptyCategories(){
+  return ["Segunda","Tercera","Cuarta","Quinta","Sexta","Séptima"].map(n=>({id:nid(),name:n,groups:[]}));
+}
+function newTournament(){
+  const nombre=prompt("Nombre del campeonato nuevo (ej: Campeonato Octubre):", "Campeonato "+["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"][new Date().getMonth()]);
+  if(nombre===null) return; // canceló
+  if(!confirm("¿Seguro? Esto BORRA todas las parejas, resultados y cruces actuales para empezar de cero.\n\nNuevo campeonato: "+(nombre.trim()||"Campeonato 15/0"))) return;
+  state.tournamentName = nombre.trim() || "Campeonato 15/0";
+  state.categories = emptyCategories();
+  state.inscripcion = [];
+  state.bracket = {};
+  currentCat=null; currentCruce=null;
+  save(); renderAll(); go("inicio");
+  toast("Campeonato nuevo creado");
+}
 
 /* ---------- ESTADO ---------- */
-let state = { logo:null, mfmt:2, updatedAt:0, categories:seedCategories(), inscripcion:[], bracket:{} };
+let state = { logo:null, mfmt:2, updatedAt:0, tournamentName:"Campeonato 15/0", categories:seedCategories(), inscripcion:[], bracket:{} };
 let currentCat = null;   // id de categoría en vista Categorías
 let currentCruce = null; // id de categoría en vista Cruces
 let syncCode = null;
@@ -641,7 +674,8 @@ function hydrateBracket(raw){
     const r0=toArr(b.r0).map(m=>({a:slot(m&&m.a),b:slot(m&&m.b)}));
     const winners=(b.winners&&typeof b.winners==="object")?b.winners:{};
     const slots=(b.slots&&typeof b.slots==="object")?b.slots:{};
-    if(r0.length) out[k]={size:b.size||2,r0,winners,slots};
+    const pairing=Array.isArray(b.pairing)?b.pairing:null;
+    if(r0.length) out[k]={size:b.size||2,r0,winners,slots,pairing,nGroups:b.nGroups};
     // (llaves con el formato viejo se ignoran; se regeneran con un toque)
   });
   return out;
@@ -652,6 +686,7 @@ function hydrateState(raw){
     logo: raw.logo || null,
     mfmt: raw.mfmt || 1,
     updatedAt: raw.updatedAt || 0,
+    tournamentName: raw.tournamentName || "Campeonato 15/0",
     categories: toArr(raw.categories).map(hydrateCat),
     inscripcion: toArr(raw.inscripcion).map(p=>({
       id:(p&&p.id)||nid(), catId:(p&&p.catId)||null,
@@ -852,6 +887,8 @@ function applyLogo(){
    INICIO
    ============================================================ */
 function renderInicio(){
+  const tn=document.getElementById("homeTournName");
+  if(tn) tn.textContent=state.tournamentName||"Campeonato 15/0";
   const mini=document.getElementById("homePending");
   if(mini) mini.innerHTML=pendingMiniHTML();
   const grid=document.getElementById("homeCatGrid");
@@ -984,29 +1021,30 @@ function matchBlock(cat,g,m,mi){
   const played=m.a!==null&&m.b!==null&&matchPlayed(m);
   const showSTB=needsSTB(m);
   const gp="'"+cat.id+"','"+g.id+"',"+mi;
+  const NUM='type="text" inputmode="numeric" pattern="[0-9]*" maxlength="2"';
   let h='<div class="match'+(played&&w?" done":"")+'" id="match-'+g.id+'-'+mi+'">';
   h+='<div class="match-top"><span class="mn">P'+(mi+1)+'</span>'+
-     '<span class="mh">🕐 <input type="number" value="'+(m.hour??"")+'" min="8" max="23" onchange="editMatchHour('+gp+',this.value)">hs</span></div>';
+     '<span class="mh">🕐 <input '+NUM+' value="'+(m.hour??"")+'" onchange="editMatchHour('+gp+',this.value)">hs</span></div>';
   // encabezado de sets
   h+='<div class="score-heads"><span>Set 1</span><span>Set 2</span></div>';
   // equipo A
   h+='<div class="mteam'+(w==="A"?" winner":"")+'">'+teamSelect(cat,g,m,mi,"a")+
      '<div class="score-box">'+
-       '<input type="number" min="0" max="9" value="'+(m.s1[0]??"")+'" onchange="editScore('+gp+',\'s1\',0,this.value)">'+
-       '<input type="number" min="0" max="9" value="'+(m.s2[0]??"")+'" onchange="editScore('+gp+',\'s2\',0,this.value)">'+
+       '<input '+NUM+' value="'+(m.s1[0]??"")+'" onchange="editScore('+gp+',\'s1\',0,this.value)">'+
+       '<input '+NUM+' value="'+(m.s2[0]??"")+'" onchange="editScore('+gp+',\'s2\',0,this.value)">'+
      '</div></div>';
   h+='<div class="vs-mini">vs</div>';
   // equipo B
   h+='<div class="mteam'+(w==="B"?" winner":"")+'">'+teamSelect(cat,g,m,mi,"b")+
      '<div class="score-box">'+
-       '<input type="number" min="0" max="9" value="'+(m.s1[1]??"")+'" onchange="editScore('+gp+',\'s1\',1,this.value)">'+
-       '<input type="number" min="0" max="9" value="'+(m.s2[1]??"")+'" onchange="editScore('+gp+',\'s2\',1,this.value)">'+
+       '<input '+NUM+' value="'+(m.s1[1]??"")+'" onchange="editScore('+gp+',\'s1\',1,this.value)">'+
+       '<input '+NUM+' value="'+(m.s2[1]??"")+'" onchange="editScore('+gp+',\'s2\',1,this.value)">'+
      '</div></div>';
   // super tiebreak
   h+='<div class="stb-row'+(showSTB?" show":"")+'"><span class="stbl">Super TB (a 11)</span>'+
-     '<input type="number" min="0" value="'+(m.stb[0]??"")+'" onchange="editScore('+gp+',\'stb\',0,this.value)">'+
+     '<input '+NUM+' value="'+(m.stb[0]??"")+'" onchange="editScore('+gp+',\'stb\',0,this.value)">'+
      '<span class="sp">-</span>'+
-     '<input type="number" min="0" value="'+(m.stb[1]??"")+'" onchange="editScore('+gp+',\'stb\',1,this.value)"></div>';
+     '<input '+NUM+' value="'+(m.stb[1]??"")+'" onchange="editScore('+gp+',\'stb\',1,this.value)"></div>';
   h+='</div>';
   return h;
 }
@@ -1056,20 +1094,37 @@ function editGroupCourt(catId,gid,val){
 function editMatchTeam(catId,gid,mi,side,val){
   const g=findGroup(catId,gid); if(!g)return;
   g.matches[mi][side]= val===""?null:Number(val);
-  save(); refreshMatch(catId,gid,mi); refreshStandings(catId,gid);
+  save(); updateMatchVisuals(catId,gid,mi); refreshStandings(catId,gid);
 }
 function editMatchHour(catId,gid,mi,val){
   const g=findGroup(catId,gid); if(!g)return;
-  g.matches[mi].hour= val===""?null:Number(val);
+  const n=parseInt(val,10);
+  g.matches[mi].hour= (val===""||isNaN(n))?null:n;
   save(); // el input ya muestra la hora; no hace falta redibujar
 }
 function editScore(catId,gid,mi,set,side,val){
   const g=findGroup(catId,gid); if(!g)return;
-  g.matches[mi][set][side]= val===""?null:Number(val);
-  save(); refreshMatch(catId,gid,mi); refreshStandings(catId,gid);
+  const n=parseInt(val,10);
+  g.matches[mi][set][side]= (val===""||isNaN(n))?null:n;
+  save(); updateMatchVisuals(catId,gid,mi); refreshStandings(catId,gid);
 }
-/* Actualiza SOLO un partido (para que aparezca el super TB y el ganador
-   sin redibujar toda la categoría — así se carga fluido en el celular). */
+/* Actualiza SOLO lo visual de un partido (ganador, "completo", super TB)
+   SIN recrear los casilleros, para no cerrar el teclado al cargar. */
+function updateMatchVisuals(catId,gid,mi){
+  const g=findGroup(catId,gid); if(!g)return;
+  const m=g.matches[mi];
+  const el=document.getElementById("match-"+gid+"-"+mi);
+  if(!el)return;
+  const w=matchWinner(m);
+  const played=m.a!==null&&m.b!==null&&matchPlayed(m);
+  el.classList.toggle("done", !!(played&&w));
+  const teams=el.querySelectorAll(".mteam");
+  if(teams[0]) teams[0].classList.toggle("winner", w==="A");
+  if(teams[1]) teams[1].classList.toggle("winner", w==="B");
+  const stb=el.querySelector(".stb-row");
+  if(stb) stb.classList.toggle("show", needsSTB(m));
+}
+/* Recrea el bloque entero (se usa al cambiar cosas estructurales) */
 function refreshMatch(catId,gid,mi){
   const g=findGroup(catId,gid), cat=catById(catId); if(!g||!cat)return;
   const el=document.getElementById("match-"+gid+"-"+mi);
@@ -1290,8 +1345,93 @@ function roundNames(S){
   return map[S]||["Ronda 1","Final"];
 }
 
+const PAIRINGS_4=[ [[0,1],[2,3]], [[0,2],[1,3]], [[0,3],[1,2]] ];
+function pairingLabel(pr){ return pr.map(p=>"G"+(p[0]+1)+" vs G"+(p[1]+1)).join("  ·  "); }
+function pairingIndex(pr){
+  if(!pr) return 1;
+  const key=JSON.stringify(pr);
+  const i=PAIRINGS_4.findIndex(p=>JSON.stringify(p)===key);
+  return i<0?1:i;
+}
+// 1° y 2° de cada grupo (según resultados)
+function clasifByGroup(cat){
+  return cat.groups.map((g,gi)=>{
+    const st=groupStandings(g);
+    const mk=s=> ({name:(s&&s.name)||"", gid:g.id, group:gi+1});
+    return {gi, first:mk(st[0]), second:mk(st[1])};
+  });
+}
+// Arma r0 según la cantidad de series, respetando: dos parejas que ya se
+// cruzaron en el grupo no se vuelven a ver hasta la final.
+function buildBracketData(cat, pairing){
+  const n=cat.groups.length;
+  const G=clasifByGroup(cat);
+  const first=gi=>G[gi].first, second=gi=>G[gi].second;
+  const cross=(a,b)=>({a:a||{name:""}, b:b||{name:""}});
+  const BYE={name:"BYE",bye:true};
+  if(n===2){
+    // directo a semis, cruzadas
+    return {size:4, pairing:null, r0:[
+      cross(first(0), second(1)),   // 1°G1 vs 2°G2
+      cross(second(0), first(1))    // 2°G1 vs 1°G2
+    ]};
+  }
+  if(n===4){
+    const pr = pairing || [[0,2],[1,3]];
+    const [A,B]=pr[0], [Cc,D]=pr[1];
+    // cada par reparte sus dos cruces en semis OPUESTAS (no rematch antes de la final)
+    return {size:8, pairing:pr, r0:[
+      cross(first(A),  second(B)),   // semi1
+      cross(first(Cc), second(D)),   // semi1
+      cross(second(A), first(B)),    // semi2
+      cross(second(Cc),first(D))     // semi2
+    ]};
+  }
+  if(n===3){
+    const firstsRank = categoryRanking(cat).firsts; // primeros ordenados por calidad
+    const gi=f=>f.group-1;
+    const g1=gi(firstsRank[0]), g2=gi(firstsRank[1]), g3=gi(firstsRank[2]);
+    // los 2 mejores primeros (g1,g2) pasan directo a semis; las otras 4 juegan cuartos
+    return {size:8, pairing:null, r0:[
+      cross(first(g1), BYE),             // semi1 — P1 directo
+      cross(second(g2), first(g3)),      // semi1 — 2°(de P2) vs 3er primero
+      cross(second(g1), second(g3)),     // semi2 — 2°(de P1) vs 2°(de P3)
+      cross(first(g2), BYE)              // semi2 — P2 directo
+    ]};
+  }
+  return null; // otros casos → genérico
+}
+function byesFromR0(r0){
+  const w={};
+  r0.forEach((m,mi)=>{
+    if(m.a&&m.a.bye && !(m.b&&m.b.bye)) w["0-"+mi]="b";
+    else if(m.b&&m.b.bye && !(m.a&&m.a.bye)) w["0-"+mi]="a";
+  });
+  return w;
+}
 function generateBracket(catId){
   const cat=catById(catId); if(!cat)return;
+  const n=cat.groups.length;
+  if(n<2){ toast("Faltan grupos para armar la llave."); return; }
+  const prev=state.bracket[catId];
+  const data=buildBracketData(cat, prev&&prev.pairing);
+  if(!data){ return generateBracketGeneric(catId); }
+  state.bracket[catId]={ size:data.size, r0:data.r0, winners:byesFromR0(data.r0),
+    slots:(prev&&prev.slots)||{}, pairing:data.pairing, nGroups:n };
+  save(); renderCruces(); toast("Llave generada");
+}
+function setPairing(catId, idx){
+  const cat=catById(catId); if(!cat)return;
+  const data=buildBracketData(cat, PAIRINGS_4[idx]);
+  if(!data)return;
+  const prev=state.bracket[catId];
+  state.bracket[catId]={ size:data.size, r0:data.r0, winners:byesFromR0(data.r0),
+    slots:(prev&&prev.slots)||{}, pairing:data.pairing, nGroups:4 };
+  save(); renderCruces();
+}
+// Fallback genérico (cantidades de grupos distintas de 2/3/4)
+function generateBracketGeneric(catId){
+  const cat=catById(catId);
   const rank=categoryRanking(cat).all;
   const C=rank.length;
   if(C<2){ toast("Faltan clasificados. Cargá resultados primero."); return; }
@@ -1303,7 +1443,6 @@ function generateBracket(catId){
   for(let i=0;i<order.length;i+=2) firstRound.push({sa:order[i],sb:order[i+1]});
   const teamOf=seed=>seedTeam[seed];
   const clash=m=>{ const A=teamOf(m.sa),B=teamOf(m.sb); return A&&B&&A.gid===B.gid; };
-  // anti-choque de grupo en primera ronda
   for(let i=0;i<firstRound.length;i++){
     if(clash(firstRound[i])){
       for(let j=0;j<firstRound.length;j++){
@@ -1317,18 +1456,11 @@ function generateBracket(catId){
   }
   const r0=firstRound.map(m=>{
     const A=teamOf(m.sa),B=teamOf(m.sb);
-    return {
-      a: A?{name:A.name,gid:A.gid,group:A.group}:{name:"BYE",bye:true},
-      b: B?{name:B.name,gid:B.gid,group:B.group}:{name:"BYE",bye:true}
-    };
+    return { a: A?{name:A.name,gid:A.gid,group:A.group}:{name:"BYE",bye:true},
+             b: B?{name:B.name,gid:B.gid,group:B.group}:{name:"BYE",bye:true} };
   });
-  // los byes avanzan solos: marco ganador al lado que sí tiene pareja
-  const winners={};
-  r0.forEach((m,mi)=>{
-    if(m.a.bye && !m.b.bye) winners["0-"+mi]="b";
-    else if(m.b.bye && !m.a.bye) winners["0-"+mi]="a";
-  });
-  state.bracket[catId]={size:S,r0,winners,slots:{}};
+  const prev=state.bracket[catId];
+  state.bracket[catId]={size:S,r0,winners:byesFromR0(r0),slots:(prev&&prev.slots)||{},nGroups:cat.groups.length};
   save(); renderCruces(); toast("Llave generada");
 }
 
@@ -1387,7 +1519,7 @@ function renderCruces(){
   }
   const rank=categoryRanking(cat);
   const playedGroups=cat.groups.filter(groupComplete).length;
-  let html='<div class="bracket-info">Pasan las <b>2 primeras de cada grupo</b>. Las mejores rankeadas arrancan más adelante y dos parejas del mismo grupo se intentan separar.<br><b>'+playedGroups+'/'+cat.groups.length+'</b> grupos completos.</div>';
+  let html='<div class="bracket-info">Pasan las <b>2 primeras de cada grupo</b>. Dos parejas que ya se cruzaron en el grupo no se vuelven a ver hasta la final.<br><b>'+playedGroups+'/'+cat.groups.length+'</b> grupos completos.</div>';
   html+='<h3 style="font-size:15px;color:var(--francia-osc);margin:0 0 10px">Clasificados</h3>';
   if(rank.all.length===0){
     html+='<div class="mini-note" style="margin-bottom:16px">Cargá resultados en la pestaña Categorías para ver los clasificados.</div>';
@@ -1409,6 +1541,14 @@ function renderCruces(){
   }else{
     html+='<div class="btn-row"><button class="btn sm" onclick="generateBracket(\''+currentCruce+'\')">↻ Rehacer</button>'+
           '<button class="btn danger sm" onclick="clearBracket(\''+currentCruce+'\')">Borrar llave</button></div>';
+    // sorteo de grupos (solo con 4 series)
+    if(cat.groups.length===4){
+      const curIdx=pairingIndex(state.bracket[currentCruce].pairing);
+      html+='<div class="field" style="margin-bottom:12px"><label>🎲 Sorteo — qué grupos se cruzan</label>'+
+        '<select onchange="setPairing(\''+currentCruce+'\',this.value)" style="width:100%;border:1.5px solid var(--linea);border-radius:10px;padding:11px;font-size:14px;font-weight:700;color:var(--francia-osc);background:#fff">'+
+        PAIRINGS_4.map((pr,i)=>'<option value="'+i+'"'+(i===curIdx?" selected":"")+'>'+pairingLabel(pr)+'</option>').join("")+
+        '</select></div>';
+    }
     html+='<div class="mini-note" style="margin-bottom:12px">Tocá el 🏆 de la pareja que ganó cada partido. El ganador pasa solo a la ronda siguiente; el que pierde queda afuera. En la primera ronda podés cambiar las parejas con los desplegables.</div>';
     html+=bracketHTML(currentCruce);
     html+='<button class="btn wide" style="margin-top:16px;background:#25D366" onclick="copyWhatsapp(\''+currentCruce+'\')">📋 Copiar mensaje para WhatsApp</button>';
@@ -1586,22 +1726,44 @@ function catShort(name){
   const map={"Segunda":"2ª","Tercera":"3ª","Cuarta":"4ª","Quinta":"5ª","Sexta":"6ª","Séptima":"7ª"};
   return map[name]||name.slice(0,3);
 }
-// Recorre las llaves y arma qué ocupa cada cancha/hora
-function collectCourtUsage(){
-  const usage={}; // "venue||court||hora" -> [ {cat, round} ]
+function phaseShort(phase){
+  if(/octavos/i.test(phase)) return "8vos";
+  if(/cuartos/i.test(phase)) return "4tos";
+  if(/semi/i.test(phase))    return "Semi";
+  if(/final/i.test(phase))   return "Final";
+  return phase;
+}
+// Lista de partidos de todas las llaves (sin byes), con su fase y si ya tienen cancha/hora
+function assignableMatches(){
+  const list=[];
   state.categories.forEach(cat=>{
-    const br=state.bracket[cat.id];
-    if(!br||!br.slots) return;
+    const br=state.bracket[cat.id]; if(!br) return;
+    const rounds=computeRounds(br);
     const rnames=roundNames(br.size);
-    Object.keys(br.slots).forEach(key=>{
-      const s=br.slots[key];
-      if(!s || !s.venue || s.court===undefined || s.court===null || s.court==="" || !s.hour) return;
-      const h=parseInt(String(s.hour),10);
-      if(isNaN(h)) return;
-      const uk=s.venue+"||"+s.court+"||"+h;
-      const ri=parseInt((key.split("-")[0])||"0",10);
-      (usage[uk]=usage[uk]||[]).push({cat:cat.name, round:rnames[ri]||"", hourText:s.hour});
+    rounds.forEach((round,ri)=>{
+      const playable=[];
+      round.forEach((mt,mi)=>{ if(!((mt.a&&mt.a.bye)||(mt.b&&mt.b.bye))) playable.push(mi); });
+      playable.forEach((mi,idx)=>{
+        const s=(br.slots&&br.slots[ri+"-"+mi])||{};
+        const assigned=!!(s.venue && (s.court||s.court===0) && s.hour);
+        list.push({catId:cat.id,catName:cat.name,ri,mi,phase:rnames[ri]||("Ronda "+(ri+1)),
+          phaseNum: playable.length>1?(idx+1):0, assigned, slot:s});
+      });
     });
+  });
+  return list;
+}
+function matchOptLabel(m){
+  return phaseShort(m.phase)+" · "+catShort(m.catName)+(m.phaseNum?(" #"+m.phaseNum):"");
+}
+// Qué ocupa cada celda (venue||court||hora), derivado de los partidos asignados
+function collectCourtUsage(){
+  const usage={};
+  assignableMatches().forEach(m=>{
+    if(!m.assigned) return;
+    const h=parseInt(String(m.slot.hour),10); if(isNaN(h)) return;
+    const uk=m.slot.venue+"||"+m.slot.court+"||"+h;
+    (usage[uk]=usage[uk]||[]).push(m);
   });
   return usage;
 }
@@ -1611,9 +1773,7 @@ function renderCanchas(){
   const usage=collectCourtUsage();
   const totalBusy=Object.values(usage).reduce((a,u)=>a+u.length,0);
   let html='';
-  // resumen
-  const libres = DOM_HORAS.length*CANCHAS_LIST.length - Object.keys(usage).length;
-  html+='<div class="ch-summary"><span class="ch-dot busy"></span>Ocupado &nbsp;&nbsp;<span class="ch-dot free"></span>Libre &nbsp;·&nbsp; '+totalBusy+' partido'+(totalBusy===1?"":"s")+' asignado'+(totalBusy===1?"":"s")+'</div>';
+  html+='<div class="ch-summary"><span class="ch-dot busy"></span>Ocupado &nbsp;&nbsp;<span class="ch-dot free"></span>Libre &nbsp;·&nbsp; tocá una celda para asignar</div>';
   html+='<div class="ch-wrap"><table class="ch-grid"><thead><tr><th class="ch-corner">Hora</th>';
   CANCHAS_LIST.forEach(c=> html+='<th>'+c.label+'</th>');
   html+='</tr></thead><tbody>';
@@ -1621,23 +1781,71 @@ function renderCanchas(){
     html+='<tr><td class="ch-hour">'+h+'</td>';
     CANCHAS_LIST.forEach(c=>{
       const u=usage[c.venue+"||"+c.court+"||"+h];
+      const onclick='onclick="openCanchaPicker(\''+c.venue+'\','+c.court+','+h+')"';
       if(u && u.length){
         const conflict=u.length>1;
-        const txt=u.map(x=>catShort(x.cat)).join(" / ");
-        html+='<td class="ch-cell busy'+(conflict?" conflict":"")+'"><span class="ch-cat">'+esc(txt)+'</span></td>';
+        const txt=u.map(x=>catShort(x.catName)+" "+phaseShort(x.phase)).join(" / ");
+        html+='<td class="ch-cell busy'+(conflict?" conflict":"")+'" '+onclick+'><span class="ch-cat">'+esc(txt)+'</span></td>';
       }else{
-        html+='<td class="ch-cell free"></td>';
+        html+='<td class="ch-cell free" '+onclick+'></td>';
       }
     });
     html+='</tr>';
   });
   html+='</tbody></table></div>';
   if(totalBusy===0){
-    html+='<div class="mini-note">Todavía no asignaste horarios a los cruces. Andá a <b>Cruces</b>, generá la llave y poné hora y cancha en cada partido: acá vas a ver cómo se ocupan las canchas.</div>';
+    html+='<div class="mini-note">Tocá cualquier celda (cancha + hora) y elegí qué se juega ahí (cuartos, semi o final de cada categoría). Solo aparecen las fases que existen y lo que todavía no asignaste.</div>';
   }else{
-    html+='<div class="mini-note">Las verdes están libres. Si dos partidos quedan en la misma cancha y hora, la celda se pone en rojo (choque).</div>';
+    html+='<div class="mini-note">Tocá una celda para asignar o cambiar. Verde = libre, rojo = dos partidos pisados en la misma cancha y hora.</div>';
   }
   cont.innerHTML=html;
+}
+/* ---- Selector al tocar una celda ---- */
+let canchaSel=null;
+function openCanchaPicker(venue,court,hour){
+  canchaSel={venue,court,hour};
+  renderCanchaPicker();
+}
+function closeCanchaPicker(){ canchaSel=null; renderCanchaPicker(); }
+function renderCanchaPicker(){
+  const ov=document.getElementById("canchaPicker");
+  if(!ov) return;
+  if(!canchaSel){ ov.classList.remove("show"); ov.innerHTML=""; return; }
+  const {venue,court,hour}=canchaSel;
+  const all=assignableMatches();
+  const here=all.filter(m=>m.assigned && m.slot.venue===venue && Number(m.slot.court)===court && parseInt(String(m.slot.hour),10)===hour);
+  const free=all.filter(m=>!m.assigned);
+  let h='<div class="cp-box" onclick="event.stopPropagation()">';
+  h+='<div class="cp-head">'+venueNameMsg(venue)+' · Cancha '+court+' · '+hour+'hs</div>';
+  if(here.length){
+    h+='<div class="cp-cur">Ahora acá:</div>';
+    here.forEach(m=>{
+      h+='<div class="cp-curitem"><span>'+esc(matchOptLabel(m))+'</span>'+
+         '<button class="cp-free" onclick="freeCancha(\''+m.catId+'\','+m.ri+','+m.mi+')">Quitar</button></div>';
+    });
+  }
+  h+='<div class="cp-label">Poner acá:</div><div class="cp-list">';
+  if(free.length===0){
+    h+='<div class="mini-note" style="padding:4px 2px">No quedan partidos sin asignar. (Generá las llaves en Cruces o liberá alguna cancha.)</div>';
+  }else{
+    free.forEach(m=>{ h+='<button class="cp-opt" onclick="assignCancha(\''+m.catId+'\','+m.ri+','+m.mi+')">'+esc(matchOptLabel(m))+'</button>'; });
+  }
+  h+='</div><button class="btn soft wide" style="margin-top:12px" onclick="closeCanchaPicker()">Cerrar</button></div>';
+  ov.innerHTML=h; ov.classList.add("show");
+}
+function assignCancha(catId,ri,mi){
+  if(!canchaSel) return;
+  const br=state.bracket[catId]; if(!br) return;
+  if(!br.slots) br.slots={};
+  br.slots[ri+"-"+mi]={ hour:String(canchaSel.hour), venue:canchaSel.venue, court:canchaSel.court };
+  save(); closeCanchaPicker(); renderCanchas(); renderCruces();
+  toast("Asignado");
+}
+function freeCancha(catId,ri,mi){
+  const br=state.bracket[catId]; if(!br||!br.slots) return;
+  delete br.slots[ri+"-"+mi];
+  save(); closeCanchaPicker(); renderCanchas(); renderCruces();
+  toast("Cancha liberada");
 }
 </script>
 <script>
@@ -1758,17 +1966,78 @@ function autoBuild(){
 
 function renderArmar(){
   const cont=document.getElementById("armarContent");
+  let html='';
+  // --- Importar grupo desde un mensaje ---
+  const catOpts=state.categories.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join("");
+  html+='<div class="sync-card"><h3>📋 Pegar grupo desde un mensaje</h3>'+
+    '<p>Si el cliente ya te pasó el grupo armado, pegá el mensaje y lo agrego solo a la categoría que elijas. No tenés que escribir nombre por nombre.</p>'+
+    '<div class="field"><label>Categoría</label>'+
+    '<select id="importCat" style="width:100%;border:1.5px solid var(--linea);border-radius:10px;padding:11px;font-size:14px;font-weight:700;color:var(--francia-osc);background:#fff">'+catOpts+'</select></div>'+
+    '<div class="field"><label>Mensaje del grupo</label>'+
+    '<textarea id="importMsg" style="min-height:150px;font-family:inherit;font-size:13px" placeholder="SABADO - LA PASCUALA&#10;(Cancha 1)&#10;&#10;19 hs&#10;Nico / Julio 🆚 Mati / Carlos&#10;&#10;20 hs&#10;Nani / Jessy 🆚 ———&#10;&#10;21 hs&#10;Partido restante"></textarea></div>'+
+    '<button class="btn wide" onclick="importGroupFromMessage()">＋ Agregar grupo a la categoría</button>'+
+    '<div class="mini-note">Detecta la sede, la cancha, los horarios y las 3 parejas (incluida la que descansa). Lo que no entienda lo deja en blanco para que lo completes.</div></div>';
+  html+='<div class="divider"></div>';
+  // --- Armado automático por disponibilidad ---
+  html+='<h3 style="font-size:15px;color:var(--francia-osc);margin:0 0 10px">⚙️ Armar por disponibilidad</h3>';
   const total=state.inscripcion.length;
   if(total===0){
-    cont.innerHTML='<div class="empty-state"><div class="ic">⚙️</div>'+
-      '<p>Primero cargá parejas en <b>Inscripción</b>.</p>'+
-      '<button class="btn" onclick="go(\'inscripcion\')">Ir a Inscripción</button></div>';
-    return;
+    html+='<div class="empty-state" style="padding:22px"><p>Para armar los grupos automáticamente por horarios disponibles, primero cargá parejas en <b>Inscripción</b>.</p><button class="btn sm" onclick="go(\'inscripcion\')">Ir a Inscripción</button></div>';
+  }else{
+    html+='<div class="bracket-info">Hay <b>5 canchas</b> en paralelo (15/0: 1, 2, 3 · La Pascuala: 1, 2) y 6 franjas de 3 horas. La app arma tríos que compartan horario y les asigna cancha. Lo que no cierre te lo marca abajo.</div>';
+    html+='<button class="btn wide" onclick="doAutoBuild()" style="margin-bottom:16px">⚙️ Generar grupos ('+total+' parejas)</button>';
+    html+='<div id="autoResult"></div>';
   }
-  let html='<div class="bracket-info">Hay <b>5 canchas</b> en paralelo (15/0: 1, 2, 3 · La Pascuala: 1, 2) y 6 franjas de 3 horas. La app arma tríos que compartan horario y les asigna cancha. Lo que no cierre te lo marca abajo.</div>';
-  html+='<button class="btn wide" onclick="doAutoBuild()" style="margin-bottom:16px">⚙️ Generar grupos ('+total+' parejas)</button>';
-  html+='<div id="autoResult"></div>';
   cont.innerHTML=html;
+}
+/* ---- Parser de un mensaje de grupo ---- */
+function parseGroupMessage(text){
+  if(!text||!text.trim()) return null;
+  const raw=text, low=raw.toLowerCase();
+  let day="Sábado";
+  if(/viernes/.test(low)) day="Viernes";
+  else if(/domingo/.test(low)) day="Domingo";
+  else if(/s[áa]bado/.test(low)) day="Sábado";
+  let venue="15/0";
+  if(/pascuala/.test(low)) venue="La Pascuala";
+  else if(/quince\s*cero|15\s*\/?\s*0/.test(low)) venue="15/0";
+  let court=1;
+  const mc=low.match(/cancha\s*(\d+)/);
+  if(mc) court=parseInt(mc[1],10);
+  // horas por línea ("19 hs")
+  const horas=[];
+  raw.split(/\n/).forEach(line=>{
+    const m=line.match(/^\s*(\d{1,2})\s*(?:hs|h)\b/i);
+    if(m) horas.push(parseInt(m[1],10));
+  });
+  const startHour = horas.length?horas[0]:10;
+  // líneas de enfrentamiento
+  const vsLines=[];
+  raw.split(/\n/).forEach(line=>{ if(/🆚|\bvs\b/i.test(line)) vsLines.push(line); });
+  function parsePair(s){
+    s=(s||"").replace(/🆚/g," ").replace(/[—–]+/g," ").replace(/-{2,}/g," ").trim();
+    const parts=s.split("/").map(x=>x.trim()).filter(Boolean);
+    return [parts[0]||"", parts[1]||""];
+  }
+  let A=["",""],B=["",""],C=["",""];
+  if(vsLines[0]){ const s=vsLines[0].split(/🆚|\bvs\b/i); A=parsePair(s[0]); B=parsePair(s[1]); }
+  if(vsLines[1]){ const s=vsLines[1].split(/🆚|\bvs\b/i); C=parsePair(s[0]); }
+  return {day,venue,court,startHour,trio:[A,B,C]};
+}
+function importGroupFromMessage(){
+  const ta=document.getElementById("importMsg"), sel=document.getElementById("importCat");
+  if(!ta||!sel) return;
+  if(!ta.value.trim()){ toast("Pegá el mensaje primero"); return; }
+  const cat=catById(sel.value);
+  if(!cat){ toast("Elegí la categoría"); return; }
+  if(cat.groups.length>=6){ toast("Esa categoría ya tiene 6 grupos"); return; }
+  const p=parseGroupMessage(ta.value);
+  const g=mkGroup(p.venue,p.court,p.day,p.startHour,p.trio);
+  cat.groups.push(g);
+  save(); ta.value="";
+  currentCat=cat.id; renderInicio();
+  toast("Grupo agregado a "+cat.name);
+  go("categoria");
 }
 
 let lastPlan=null;
