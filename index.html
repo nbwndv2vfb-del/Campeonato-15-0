@@ -1034,24 +1034,24 @@ function matchBlock(cat,g,m,mi){
      '<span class="mh">🕐 <input '+NUM+' value="'+(m.hour??"")+'" onchange="editMatchHour('+gp+',this.value)">hs</span></div>';
   // encabezado de sets
   h+='<div class="score-heads"><span>Set 1</span><span>Set 2</span></div>';
-  // equipo A
+  // equipo A  (oninput: marca el ganador al tipear, sin tener que tocar afuera)
   h+='<div class="mteam'+(w==="A"?" winner":"")+'">'+teamSelect(cat,g,m,mi,"a")+
      '<div class="score-box">'+
-       '<input '+NUM+' value="'+(m.s1[0]??"")+'" onchange="editScore('+gp+',\'s1\',0,this.value)">'+
-       '<input '+NUM+' value="'+(m.s2[0]??"")+'" onchange="editScore('+gp+',\'s2\',0,this.value)">'+
+       '<input '+NUM+' value="'+(m.s1[0]??"")+'" oninput="editScore('+gp+',\'s1\',0,this.value)">'+
+       '<input '+NUM+' value="'+(m.s2[0]??"")+'" oninput="editScore('+gp+',\'s2\',0,this.value)">'+
      '</div></div>';
   h+='<div class="vs-mini">vs</div>';
   // equipo B
   h+='<div class="mteam'+(w==="B"?" winner":"")+'">'+teamSelect(cat,g,m,mi,"b")+
      '<div class="score-box">'+
-       '<input '+NUM+' value="'+(m.s1[1]??"")+'" onchange="editScore('+gp+',\'s1\',1,this.value)">'+
-       '<input '+NUM+' value="'+(m.s2[1]??"")+'" onchange="editScore('+gp+',\'s2\',1,this.value)">'+
+       '<input '+NUM+' value="'+(m.s1[1]??"")+'" oninput="editScore('+gp+',\'s1\',1,this.value)">'+
+       '<input '+NUM+' value="'+(m.s2[1]??"")+'" oninput="editScore('+gp+',\'s2\',1,this.value)">'+
      '</div></div>';
   // super tiebreak
   h+='<div class="stb-row'+(showSTB?" show":"")+'"><span class="stbl">Super TB (a 11)</span>'+
-     '<input '+NUM+' value="'+(m.stb[0]??"")+'" onchange="editScore('+gp+',\'stb\',0,this.value)">'+
+     '<input '+NUM+' value="'+(m.stb[0]??"")+'" oninput="editScore('+gp+',\'stb\',0,this.value)">'+
      '<span class="sp">-</span>'+
-     '<input '+NUM+' value="'+(m.stb[1]??"")+'" onchange="editScore('+gp+',\'stb\',1,this.value)"></div>';
+     '<input '+NUM+' value="'+(m.stb[1]??"")+'" oninput="editScore('+gp+',\'stb\',1,this.value)"></div>';
   h+='</div>';
   return h;
 }
