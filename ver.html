@@ -486,8 +486,6 @@ input,select{font-family:inherit;font-size:16px}
 
 <div class="toast" id="toast"></div>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script>
 /* ===== Config Firebase (misma base, SOLO LECTURA) ===== */
 const FIREBASE_CONFIG = {
@@ -709,7 +707,7 @@ function collectSlots(){
 }
 /* ===== Estado (solo lectura) ===== */
 let state={logo:null,categories:[],inscripcion:[],bracket:{}};
-let currentCat=null, currentCruce=null, salaCode=null, db=null, dbRef=null;
+let currentCat=null, currentCruce=null, salaCode=null;
 </script>
 <script>
 /* ===== Navegación y helpers ===== */
@@ -1045,25 +1043,29 @@ function roBTeam(team,isWin,isLose){
 </script>
 <script>
 /* ===== Conexión Firebase SOLO LECTURA ===== */
+function dbBase(){ return (FIREBASE_CONFIG.databaseURL||"").replace(/\/+$/,""); }
+function roomUrl(code){ return dbBase()+"/torneos/"+encodeURIComponent(code)+".json"; }
+let verPoll=null, verLast="";
 function connectRead(code){
   code=(code||"").trim().toLowerCase().replace(/\s+/g,"");
   if(!code) return false;
   salaCode=code;
   try{ localStorage.setItem("ver_sala", code); }catch(e){} // recordar el último código
-  try{
-    if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-    db=firebase.database();
-  }catch(e){ toast("No se pudo conectar"); return false; }
   document.getElementById("gate").classList.add("hidden");
   document.getElementById("app").classList.remove("hidden");
-  if(dbRef) dbRef.off();
-  dbRef=db.ref("torneos/"+code);
-  // SOLO escucha. Nunca escribe. La gente no puede modificar nada.
-  dbRef.on("value",s=>{
-    if(s.exists()){ state=hydrateState(s.val()); }
-    else { state={logo:null,categories:[],inscripcion:[],bracket:{}}; }
-    renderAll();
-  },err=>{ toast("Error de conexión"); });
+  // SOLO lectura por REST (funciona en cualquier red/navegador). Nunca escribe.
+  function pull(){
+    fetch(roomUrl(code)).then(r=>r.ok?r.json():null).then(data=>{
+      const str=JSON.stringify(data||{});
+      if(str===verLast) return;        // sin cambios
+      verLast=str;
+      state = data ? hydrateState(data) : {logo:null,categories:[],inscripcion:[],bracket:{}};
+      renderAll();
+    }).catch(()=>{});
+  }
+  pull();
+  if(verPoll) clearInterval(verPoll);
+  verPoll=setInterval(pull, 5000); // refresca cada 5s
   return true;
 }
 function enterCode(){
@@ -1076,6 +1078,7 @@ function enterCode(){
 }
 // Volver a la pantalla de código para cambiar de torneo
 function changeCode(){
+  if(verPoll){ clearInterval(verPoll); verPoll=null; } verLast="";
   const inp=document.getElementById("gateCode");
   if(inp) inp.value=salaCode||"";
   const app=document.getElementById("app"), gate=document.getElementById("gate");
